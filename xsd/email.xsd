@@ -1,0 +1,110 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+    <!-- Includes -->
+    <xs:include schemaLocation="types.xsd"/>
+
+    <!-- Types only used here -->
+    <xs:simpleType name="emailList">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="([^\s@,|]+@[^\s@,|]+\.[^\s@,|]+)([|,][^\s@,|]+@[^\s@,|]+\.[^\s@,|]+)*"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <!-- Elements -->
+    <xs:element name="email">
+        <xs:complexType>
+            <xs:all>
+                <!-- Outbox subnode -->
+                <xs:element name="outbox" minOccurs="0" >
+                    <xs:complexType>
+                        <xs:all>
+                            <xs:element name="server">
+                                <xs:complexType>
+                                    <xs:simpleContent>
+                                        <xs:extension base="nonEmptyString">
+                                            <xs:attribute name="pass" type="xs:string" use="required"/>
+                                            <xs:attribute name="user" type="xs:string" use="required"/>
+                                            <xs:attribute name="port" type="xs:positiveInteger" use="required"/>
+                                            <xs:attribute name="ssl" type="extbool" use="required"/>
+                                        </xs:extension>
+                                    </xs:simpleContent>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="zip_from_size_mb" type="xs:float" minOccurs="0"/>
+                            <xs:element name="max_size_mb" type="xs:float" minOccurs="0"/>
+                            <xs:element name="from" minOccurs="0"/>
+                        </xs:all>
+                    </xs:complexType>
+                </xs:element>
+                <!-- Inbox subnode -->
+                <xs:element name="inbox" minOccurs="0" >
+                    <xs:complexType>
+                        <xs:all>
+                            <xs:element name="server">
+                                <xs:complexType>
+                                    <xs:simpleContent>
+                                        <xs:extension base="nonEmptyString">
+                                            <xs:attribute name="pass" type="xs:string" use="required"/>
+                                            <xs:attribute name="user" type="xs:string" use="required"/>
+                                            <xs:attribute name="port" type="xs:positiveInteger" use="required"/>
+                                            <xs:attribute name="ssl" type="extbool" use="required"/>
+                                        </xs:extension>
+                                    </xs:simpleContent>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="checkinterval" type="xs:string" minOccurs="0"/>
+                            <xs:element name="allowed" type="xs:string" minOccurs="0"/>
+                        </xs:all>
+                    </xs:complexType>
+                </xs:element>
+                <!-- Book subnode -->
+                <xs:element name="book" minOccurs="0" >
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="entry" maxOccurs="unbounded">
+                                <xs:complexType>
+                                    <xs:simpleContent>
+                                        <xs:extension base="emailList">
+                                            <xs:attribute name="ref" type="nonEmptyString" use="required"/>
+                                        </xs:extension>
+                                    </xs:simpleContent>
+                                </xs:complexType>
+                            </xs:element>
+                        </xs:sequence>
+                    </xs:complexType>
+                    <xs:unique name="uniqueRef">
+                        <xs:selector xpath="entry"/>
+                        <xs:field xpath="@ref"/>
+                    </xs:unique>
+                </xs:element>
+                <!-- Permits subnode -->
+                <xs:element name="permits" minOccurs="0" >
+                    <xs:complexType>
+                        <xs:choice maxOccurs="unbounded">
+                            <xs:element name="allow" minOccurs="0" maxOccurs="unbounded">
+                                <xs:complexType>
+                                    <xs:simpleContent>
+                                        <xs:extension base="nonEmptyString">
+                                            <xs:attribute name="ref" type="nonEmptyString" use="required"/>
+                                            <xs:attribute name="regex" type="extbool" />
+                                        </xs:extension>
+                                    </xs:simpleContent>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="deny" minOccurs="0" maxOccurs="unbounded">
+                                <xs:complexType>
+                                    <xs:simpleContent>
+                                        <xs:extension base="nonEmptyString">
+                                            <xs:attribute name="ref" type="nonEmptyString" use="required"/>
+                                            <xs:attribute name="regex" type="extbool" />
+                                        </xs:extension>
+                                    </xs:simpleContent>
+                                </xs:complexType>
+                            </xs:element>
+                        </xs:choice>
+                    </xs:complexType>
+                </xs:element>
+            </xs:all>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>

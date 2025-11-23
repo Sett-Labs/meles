@@ -1,0 +1,120 @@
+package util.data.vals;
+
+import org.tinylog.Logger;
+import util.tasks.blocks.AbstractBlock;
+import util.tasks.blocks.NoOpBlock;
+import util.tools.Tools;
+
+import java.math.BigDecimal;
+
+public class FlagVal extends BaseVal implements NumericVal {
+    protected boolean value, defValue;
+
+    protected AbstractBlock raiseBlock = NoOpBlock.INSTANCE;
+    protected AbstractBlock fallBlock = NoOpBlock.INSTANCE;
+    protected AbstractBlock highBlock = NoOpBlock.INSTANCE;
+    protected AbstractBlock lowBlock = NoOpBlock.INSTANCE;
+
+    public FlagVal(String group, String name, String unit) {
+        super(group, name, unit);
+    }
+
+    public static FlagVal newVal(String group, String name) {
+        return new FlagVal(group, name, "");
+    }
+
+    public void setBlocks(AbstractBlock highBlock, AbstractBlock lowBlock, AbstractBlock raiseBlock, AbstractBlock fallBlock) {
+        this.raiseBlock = raiseBlock == null ? NoOpBlock.INSTANCE : raiseBlock;
+        this.fallBlock = fallBlock == null ? NoOpBlock.INSTANCE : fallBlock;
+        this.highBlock = highBlock == null ? NoOpBlock.INSTANCE : highBlock;
+        this.lowBlock = lowBlock == null ? NoOpBlock.INSTANCE : lowBlock;
+        var line = "Flags targets used:"+ (fallBlock==null?"":"fall")+" "+(raiseBlock==null?"":"raise")+" "+(highBlock==null?"":"high")+" "+(lowBlock==null?"":"low");
+        if( line.length()>22)
+            Logger.info(line);
+    }
+
+    public void value(boolean state) {
+        value = state;
+    }
+
+    public void update(boolean state) {
+       Logger.info("Updating state of "+id()+" from "+value +" to "+state);
+        if (value == state) { // Either STAY_LOW or STAY_HIGH
+            if (value) { // stay high
+                highBlock.start();
+            } else { // stay low
+                lowBlock.start();
+            }
+        } else { // Either RAISE or FALL
+            if (value) { // fall
+                Logger.info( id()+"(fv) -> Triggered fall block -> "+fallBlock.type() );
+                fallBlock.start();
+            } else { // set
+                Logger.info( id()+"(fv) -> Triggered raise block -> "+fallBlock.type());
+                raiseBlock.start();
+            }
+        }
+        this.value = state;
+    }
+
+    public void toggleState() {
+        update(!value);
+    }
+    public boolean isUp() {
+        return value;
+    }
+
+    public boolean update(double val) {
+        update(Double.compare(val, 0.0) > 0);
+        return true;
+    }
+
+    @Override
+    public boolean update(int value) {
+        update(value > 0);
+        return true;
+    }
+
+    @Override
+    public void resetValue() {
+        value = defValue;
+    }
+
+    public void defValue(boolean defValue) {
+        this.defValue = defValue;
+    }
+
+    public boolean defValue() {
+        return defValue;
+    }
+    @Override
+    public boolean parseValue(String value) {
+        var opt = Tools.parseBool(value);
+        opt.ifPresentOrElse(this::update, () -> Logger.error(id() + "-> Failed to parse " + value));
+        return opt.isPresent();
+    }
+
+    @Override
+    public double asDouble() {
+        return isUp() ? 1.0 : 0.0;
+    }
+
+    @Override
+    public int asInteger() {
+        return isUp() ? 1 : 0;
+    }
+
+    @Override
+    public BigDecimal asBigDecimal() {
+        return isUp() ? BigDecimal.ONE : BigDecimal.ZERO;
+    }
+
+    public String asString() {
+        return String.valueOf(isUp());
+    }
+
+    @Override
+    public void triggerUpdate() {
+        update(true);
+    }
+}

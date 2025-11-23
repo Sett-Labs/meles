@@ -1,0 +1,48 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+
+    <xs:simpleType name="nonEmptyString">
+        <xs:restriction base="xs:string">
+            <!-- pattern to require at least one non-whitespace character -->
+            <xs:pattern value="\S+"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="extbool">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="true"/>
+            <xs:enumeration value="false"/>
+            <xs:enumeration value="yes"/>
+            <xs:enumeration value="no"/>
+            <xs:enumeration value="on"/>
+            <xs:enumeration value="off"/>
+            <xs:enumeration value="1"/>
+            <xs:enumeration value="0"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="PeriodString">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="(\d+d)?(\d+h)?(\d+m)?(\d+s)?(\d+ms)?"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="key_colon_value">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[a-zA-Z0-9_-]+:[a-zA-Z0-9_-]+"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="hex">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="0[xX][0-9a-fA-F]+"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:simpleType name="rtvalId">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="[a-zA-Z0-9_]+"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <xs:complexType name="rtvalType">
+        <xs:attribute name="name" type="nonEmptyString" use="required"/>
+        <xs:attribute name="group" type="xs:string" />
+        <xs:attribute name="unit" type="xs:string" />
+        <xs:attribute name="def" type="nonEmptyString" />
+    </xs:complexType>
+</xs:schema>

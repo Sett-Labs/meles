@@ -1,0 +1,66 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+    <!-- Includes -->
+    <xs:include schemaLocation="types.xsd"/>
+
+    <!-- Types only used here -->
+    <!-- Element -->
+    <xs:element name="gpio">
+        <xs:complexType>
+            <xs:choice maxOccurs="unbounded">
+                <xs:element name="inputpin"  minOccurs="0" maxOccurs="unbounded">
+                    <xs:complexType>
+                        <xs:all>
+                            <xs:element name="flag" type="rtvalType"  />
+                            <xs:element name="debounce" type="PeriodString"  />
+                            <xs:element name="trigger">
+                                <xs:simpleType>
+                                    <xs:restriction base="xs:string">
+                                        <xs:enumeration value="falling"/>
+                                        <xs:enumeration value="rising"/>
+                                        <xs:enumeration value="both"/>
+                                    </xs:restriction>
+                                </xs:simpleType>
+                            </xs:element>
+                            <xs:element name="pulllogic">
+                                <xs:simpleType>
+                                    <xs:restriction base="xs:string">
+                                        <xs:enumeration value="up"/>
+                                        <xs:enumeration value="down"/>
+                                        <xs:enumeration value="internal"/>
+                                        <xs:enumeration value="none"/>
+                                    </xs:restriction>
+                                </xs:simpleType>
+                            </xs:element>
+                        </xs:all>
+                        <xs:attribute name="name" type="xs:string" use="required"/>
+                        <xs:attribute name="chip" type="xs:positiveInteger" />
+                        <xs:attribute name="line" type="xs:positiveInteger" />
+                    </xs:complexType>
+                </xs:element>
+                <xs:element name="outputpin"  minOccurs="0"  maxOccurs="unbounded">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="flag" type="rtvalType"/>
+                            <xs:element name="activehigh" type="extbool"/>
+                        </xs:sequence>
+                        <xs:attribute name="name" type="xs:string" use="required"/>
+                        <xs:attribute name="chip" type="xs:positiveInteger" />
+                        <xs:attribute name="line" type="xs:positiveInteger" />
+                    </xs:complexType>
+                </xs:element>
+            </xs:choice>
+            <xs:attribute name="chiplines" type="xs:positiveInteger" use="required"/>
+        </xs:complexType>
+    </xs:element>
+
+</xs:schema>
+<!--
+
+ <physical header="X1" pin="13"/>
+      <modes>digital_input</modes>
+      <interrupt edge="falling">
+        <cmd>info:hello?</cmd>
+      </interrupt>
+
+-->

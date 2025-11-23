@@ -1,0 +1,156 @@
+package util.tasks.blocks;
+
+import io.Writable;
+import io.netty.channel.EventLoopGroup;
+import org.tinylog.Logger;
+import util.tools.TimeTools;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.StringJoiner;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
+public class SplitBlock extends AbstractBlock implements Writable {
+    ArrayList<AbstractBlock> nexts = new ArrayList<>();
+    EventLoopGroup eventLoop;
+    long interval = 0;
+    int pos = 0;
+    ScheduledFuture<?> startNext;
+
+    enum ORDER {SEQUENTIAL,RANDOM,RANDOMSINGLE};
+    ORDER sequence;
+
+    public SplitBlock(EventLoopGroup eventLoop, String order) {
+        this.eventLoop = eventLoop;
+        sequence = switch(order){
+            case "randomsingle" -> ORDER.RANDOMSINGLE;
+            case "random" -> ORDER.RANDOM;
+            default -> ORDER.SEQUENTIAL;
+        };
+    }
+    public String type(){ return "SplitBlock";}
+    public SplitBlock setInterval(String interval) {
+        if (interval.isEmpty())
+            return this;
+        this.interval = TimeTools.parsePeriodStringToMillis(interval);
+        return this;
+    }
+
+    @Override
+    public boolean start() {
+        switch( sequence ){
+            case SEQUENTIAL -> {
+                if (interval == 0) {
+                    nexts.forEach(n -> eventLoop.submit(n::start));
+                } else {
+                    startNext = eventLoop.schedule(this::startNext, interval, TimeUnit.MILLISECONDS);
+                    nexts.get(0).start();
+                    pos = 1;
+                }
+            }
+            case RANDOMSINGLE -> {
+                int rand = (int) (Math.random()*nexts.size()); // Random is 0 till 0.99 so can never include the size
+                nexts.get(rand).start();
+            }
+            default -> Logger.warn("Not implemented yet: "+sequence);
+        }
+        return false;
+    }
+
+    private void startNext() {
+        if (nexts.size() >= pos) {
+            startNext = eventLoop.schedule(this::startNext, interval, TimeUnit.MILLISECONDS);
+            nexts.get(pos).start();
+            pos++;
+        }
+    }
+    @Override
+    public void buildId(String id) {
+        super.buildId(id);
+
+        var lastId = this.id;
+        for (var n : nexts) {
+            n.buildId(lastId);
+            lastId = n.getLastBlock().id();
+        }
+    }
+    public void reset() {
+        pos = 0;
+        nexts.forEach(AbstractBlock::reset);
+    }
+
+    public void resetId() {
+        if (id.isEmpty())
+            return;
+        id = "";
+        for (var n : nexts)
+            n.resetId();
+        if (altRoute != null)
+            altRoute.resetId();
+    }
+    public AbstractBlock addNext(AbstractBlock block) {
+        if (block == null)
+            return this;
+        if (interval != 0)
+            block.setCallbackWritable(this);
+        nexts.add(block);
+        return this;
+    }
+
+    @Override
+    protected AbstractBlock matchId(String id, HashSet<AbstractBlock> visited) {
+        if (!visited.add(this)) return null;
+
+        if (this.id.equals(id))
+            return this;
+
+        AbstractBlock match = null;
+
+        if (nexts != null && !nexts.isEmpty()) {
+            for (var next : nexts) {
+                match = next.matchId(id);
+                if (match != null)
+                    return match;
+            }
+        }
+        return match;
+    }
+    @Override
+    public boolean writeLine(String origin, String data) {
+        //Logger.info("Callback? -> " + data);
+        if (data.toLowerCase().contains("failure")) {
+            Logger.info("Failure occurred, not executing remainder");
+            var isnull = startNext == null;
+            if (isnull)
+                return true;
+            var iscan = startNext.isCancelled();
+            var isnex = startNext.isDone();
+            if (!iscan && !isnex)
+                startNext.cancel(true);
+        }
+        return true;
+    }
+
+    @Override
+    public boolean isConnectionValid() {
+        return true;
+    }
+
+    public String getInfo(StringJoiner info, String offset) {
+        if (order == 0)
+            info.add("Start of chain: " + id);
+        info.add(offset + this);
+
+        for (var block : nexts) {
+            var join = new StringJoiner("\r\n");
+            info.add(block.getInfo(join, offset + "  "));
+        }
+        info.add("-End of the chain-");
+        return info.toString();
+    }
+
+    public String toString() {
+        return "Splitting in " + nexts.size() + " tasks" + (interval != 0 ? ", with a delay between branches of " + TimeTools.convertPeriodToString(interval, TimeUnit.MILLISECONDS) : "");
+    }
+}

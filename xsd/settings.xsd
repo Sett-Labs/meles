@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+  <!-- Includes -->
+  <xs:include schemaLocation="types.xsd"/>
+  <xs:include schemaLocation="databases.xsd"/>
+  <xs:include schemaLocation="email.xsd"/>
+  <xs:include schemaLocation="streams.xsd"/>
+  <xs:include schemaLocation="rtvals.xsd"/>
+  <xs:include schemaLocation="mqtt.xsd"/>
+  <xs:include schemaLocation="i2c.xsd"/>
+  <xs:include schemaLocation="paths.xsd"/>
+  <xs:include schemaLocation="gpios.xsd"/>
+  <!-- Root element -->
+  <xs:element name="meles">
+    <xs:complexType>
+      <xs:all>
+        <!-- Settings node -->
+        <xs:element name="settings">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="maxrawage" type="xs:string" minOccurs="0"/>
+              <!-- Telnet node -->
+              <xs:element name="telnet">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="textcolor" type="xs:string" minOccurs="0"/>
+                  </xs:sequence>
+                  <xs:attribute name="port" type="xs:positiveInteger" use="required"/>
+                  <xs:attribute name="title" type="xs:string" use="required"/>
+                </xs:complexType>
+              </xs:element>
+              <!-- Taskmanager node -->
+              <xs:element name="taskmanager" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:simpleContent>
+                    <xs:extension base="nonEmptyString">
+                      <xs:attribute name="id" type="nonEmptyString" use="required"/>
+                    </xs:extension>
+                  </xs:simpleContent>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+          <!-- Make sure that the id's of taskmanager are unique -->
+          <xs:unique name="uniqueTaskManagerId">
+            <xs:selector xpath="taskmanager"/>
+            <xs:field xpath="@id"/>
+          </xs:unique>
+        </xs:element>
+        <!-- Streams node -->
+        <xs:element ref="streams" minOccurs="0"/>
+        <!-- Paths element -->
+        <xs:element ref="paths" minOccurs="0"/>
+        <!-- Database element -->
+        <xs:element ref="databases" minOccurs="0"/>
+        <!-- Email element -->
+        <xs:element ref="email" minOccurs="0"/>
+        <!-- rtvals element -->
+        <xs:element ref="rtvals" minOccurs="0"/>
+        <!-- MQTT element -->
+        <xs:element ref="mqtt" minOccurs="0"/>
+        <!-- I2C element -->
+        <xs:element ref="i2c" minOccurs="0"/>
+        <!-- GPIOS element -->
+        <xs:element ref="gpio" minOccurs="0"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<meles>
+  <path delimiter="," id="gaps">
+    <!-- Check if the nmea has a valid checksum -->
+    <filter id="validnmea" type="nmea">true</filter>
+    <!-- Process PTSAG -->
+	  <!--
+		nmea check:     $PTSAG,#00005,073144.258,02,03,2004,0,5518.02978,N,00349.59639,E,F,0000.0,0,0000.0*2A
+		ptsag check:    $PTSAG,#00005,073144.258,02,03,2004,0,5518.02978,N,00349.59639,E,F,0000.0,0,0000.0*2A
+		retime+retime   $PTSAG,#00005,2004-03-02 07:31:44.258,0,5518.02978,N,00349.59639,E,F,0000.0,0,0000.0*2A
+		math lat/lon 	$PTSAG,#00005,2004-03-02 07:31:44.258,0,55.30049633,N,3.82660650,E,F,0000.0,0,0000.0*2A					
+	-->
+	<filter id="ptsag" type="start">$PTSAG</filter>
+	<editor id="fix_timestamp">
+        <!-- Change format to match sql -->
+		<retime index="2" from="HHmmss.SSS">HH:mm:ss.SSS</retime>
+        <!-- put date and time together at i2 -->
+		<resplit leftover="append">i0,i1,i5-i4-i3 i2</resplit>
+	</editor>
+	<math id="fix_latlon">
+        <!-- convert lat DDMM.MMMMM to DD.DDDD -->
+        <op>i4=(i4-(i4%100))/100+(i4%100)/60</op>
+        <!-- convert lon DDMM.MMMMM to DD.DDDD -->
+        <op>i6=(i6-(i6%100))/100+(i6%100)/60</op>
+    </math>
+    <!-- Changed format of data, now write to memory and db -->
+	<store id="ptsag" db="gapsdata:positions">      
+      <text index="2">timestamp</text>
+	  <int  index="3">id</int>
+      <real index="4">latitude</real>
+      <real index="6">longitude</real>
+      <real index="9">depth</real>
+    </store>
+	<!-- Process PTSAQ -->
+    <filter type="start">$PTSAQ</filter>
+	<editor>
+		<retime index="1" from="HHmmss.SSS">HH:mm:ss.SSS</retime>
+		<resplit leftover="append">i0,i4-i3-i2 i1</resplit>
+		<resplit delimiter="*" leftover="append">i0,i1</resplit>
+	</editor>
+	<store group="offsets">
+      <text index="1">devtimestamp</text>
+      <int  index="2">transponder</int>
+      <real index="3">majoraxis</real>
+      <real index="4">minoraxis</real>
+      <real index="5">majorangle</real>
+      <real index="6">devz</real>
+    </store>
+  </path>
+</meles>

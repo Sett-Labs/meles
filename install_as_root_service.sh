@@ -1,0 +1,25 @@
+#!/bin/bash
+SERVICE_NAME='meles.service'
+SCRIPT="$(readlink --canonicalize-existing "$0")"
+SCRIPT_PATH="$(dirname "$SCRIPT")"
+
+SERVICE_PATH="/lib/systemd/system"
+SERVICE_FILE=$SERVICE_PATH/$SERVICE_NAME
+
+echo "[Unit]
+Description=meles Data Acquisition System Service
+After=multi-user.target
+[Service]
+Type=simple
+ExecStart=/bin/sh -c 'java -jar $SCRIPT_PATH/meles-*.jar'
+Restart=on-failure
+RestartSec=3s
+[Install]
+WantedBy=multi-user.target" | sudo tee $SERVICE_FILE > /dev/null
+
+chmod 644 $SERVICE_FILE
+
+systemctl daemon-reload
+systemctl enable $SERVICE_NAME
+systemctl start $SERVICE_NAME
+systemctl status $SERVICE_NAME

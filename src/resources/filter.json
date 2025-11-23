@@ -1,0 +1,37 @@
+{
+  "event_fields": [
+    "type",
+    "content",
+    "sender"
+  ],
+  "event_format": "client",
+  "presence": {
+    "not_senders": [],
+    "types": [
+      "m.presence"
+    ]
+  },
+  "room": {
+    "ephemeral": {
+      "not_rooms": [],
+      "not_senders": [],
+      "types": [
+        "m.receipt"
+      ]
+    },
+    "state": {
+      "not_rooms": [],
+      "types": [
+        "m.room.*"
+      ]
+    },
+    "timeline": {
+      "limit": 10,
+      "not_rooms": [],
+      "not_senders": [],
+      "types": [
+        "m.room.message"
+      ]
+    }
+  }
+}

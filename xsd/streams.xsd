@@ -1,0 +1,94 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+    <!-- Includes -->
+    <xs:include schemaLocation="types.xsd"/>
+
+    <xs:element name="streams">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="stream" minOccurs="0" maxOccurs="unbounded">
+                    <xs:complexType>
+                        <xs:all>
+                            <xs:element name="eol" default="crlf">
+                                <xs:simpleType>
+                                    <xs:restriction base="xs:string">
+                                        <xs:enumeration value="cr"/>
+                                        <xs:enumeration value="lf"/>
+                                        <xs:enumeration value="crlf"/>
+                                    </xs:restriction>
+                                </xs:simpleType>
+                            </xs:element>
+                            <xs:element name="ttl" type="PeriodString" minOccurs="0" default="-1"/>
+                            <xs:element name="port" type="xs:string" minOccurs="0" />
+                            <xs:element name="address" type="xs:string" minOccurs="0" default="-1"/>
+                            <xs:element name="log" type="extbool" minOccurs="0" default="true"/>
+                            <xs:element name="echo" type="extbool" minOccurs="0" default="false"/>
+                            <xs:element name="prefixorigin" type="extbool" minOccurs="0" default="false"/>
+                            <xs:element name="serialsettings" type="xs:string" minOccurs="0" default="19200,8,1,none"/>
+
+                            <xs:element name="triggered" minOccurs="0" >
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element name="cmd" minOccurs="0" maxOccurs="unbounded">
+                                            <xs:complexType>
+                                                <xs:simpleContent>
+                                                    <xs:extension base="nonEmptyString">
+                                                        <xs:attribute name="when" use="required">
+                                                            <xs:simpleType>
+                                                                <xs:restriction base="xs:string">
+                                                                    <xs:enumeration value="open"/>
+                                                                    <xs:enumeration value="close"/>
+                                                                    <xs:enumeration value="idle"/>
+                                                                    <xs:enumeration value="!idle"/>
+                                                                </xs:restriction>
+                                                            </xs:simpleType>
+                                                        </xs:attribute>
+                                                    </xs:extension>
+                                                </xs:simpleContent>
+                                            </xs:complexType>
+                                        </xs:element>
+                                        <xs:element name="write" minOccurs="0" maxOccurs="unbounded">
+                                            <xs:complexType>
+                                                <xs:simpleContent>
+                                                    <xs:extension base="nonEmptyString">
+                                                        <xs:attribute name="when" use="required">
+                                                            <xs:simpleType>
+                                                                <xs:restriction base="xs:string">
+                                                                    <xs:enumeration value="hello"/>
+                                                                    <xs:enumeration value="wakeup"/>
+                                                                </xs:restriction>
+                                                            </xs:simpleType>
+                                                        </xs:attribute>
+                                                    </xs:extension>
+                                                </xs:simpleContent>
+                                            </xs:complexType>
+                                        </xs:element>
+                                    </xs:sequence>
+                                </xs:complexType>
+                            </xs:element>
+                        </xs:all>
+
+                        <xs:attribute name="id" type="nonEmptyString" use="required"/>
+                        <xs:attribute name="type" use="required">
+                            <xs:simpleType>
+                                <xs:restriction base="xs:string">
+                                    <xs:enumeration value="serial"/>
+                                    <xs:enumeration value="udpwriter"/>
+                                    <xs:enumeration value="udpinput"/>
+                                    <xs:enumeration value="tcp"/>
+                                    <xs:enumeration value="tcpserver"/>
+                                    <xs:enumeration value="tcpclient"/>
+                                    <xs:enumeration value="modbus"/>
+                                </xs:restriction>
+                            </xs:simpleType>
+                        </xs:attribute>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+        <xs:unique name="uniqueStreamId">
+            <xs:selector xpath="stream"/>
+            <xs:field xpath="@id"/>
+        </xs:unique>
+    </xs:element>
+</xs:schema>

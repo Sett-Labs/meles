@@ -1,0 +1,37 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+    <!-- Includes -->
+    <xs:include schemaLocation="types.xsd"/>
+
+    <!-- Types only used here -->
+    <xs:simpleType name="mqttAddress">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="tcp://((\d{1,3}\.){3}\d{1,3}|[a-zA-Z0-9\-\.]+):\d+"/>
+        </xs:restriction>
+    </xs:simpleType>
+    <!-- Element -->
+    <xs:element name="mqtt">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="broker" maxOccurs="unbounded">
+                    <xs:complexType>
+                        <xs:all>
+                            <xs:element name="address" type="mqttAddress"  />
+                            <xs:element name="clientid" type="nonEmptyString" minOccurs="0" />
+                            <xs:element name="defaulttopic" type="nonEmptyString"  />
+                            <xs:element name="subscriptions" >
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element name="topic" type="xs:string" maxOccurs="unbounded" />
+                                    </xs:sequence>
+                                </xs:complexType>
+                            </xs:element>
+                        </xs:all>
+                        <xs:attribute name="id" type="nonEmptyString" use="required"/>
+                        <xs:attribute name="ttl" type="nonEmptyString" />
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>

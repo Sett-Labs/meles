@@ -1,0 +1,112 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+    <!-- Includes -->
+    <xs:include schemaLocation="types.xsd"/>
+    <!-- Types only used here -->
+    <xs:complexType name="tableType">
+        <xs:sequence>
+            <xs:choice maxOccurs="unbounded">
+                <xs:element name="text" type="columnType"/>
+                <xs:element name="string" type="columnType"/>
+                <xs:element name="char" type="columnType"/>
+                <xs:element name="real" type="columnType"/>
+                <xs:element name="double" type="columnType"/>
+                <xs:element name="decimal" type="columnType"/>
+                <xs:element name="float" type="columnType"/>
+                <xs:element name="int" type="columnType"/>
+                <xs:element name="integer" type="columnType"/>
+                <xs:element name="datetime" type="columnType"/>
+                <xs:element name="timestamp" type="columnType"/>
+                <xs:element name="epoch" type="columnType"/>
+                <xs:element name="epochmillis" type="columnType"/>
+            </xs:choice>
+        </xs:sequence>
+        <xs:attribute name="name" type="nonEmptyString" use="required"/>
+        <xs:attribute name="allowinsert" type="rtvalId" />
+    </xs:complexType>
+    <xs:complexType name="columnType">
+        <xs:simpleContent>
+            <xs:extension base="xs:string">
+                <xs:attribute name="alias" type="rtvalId" />
+                <xs:attribute name="def" type="xs:string" />
+            </xs:extension>
+        </xs:simpleContent>
+    </xs:complexType>
+    <!-- Elements -->
+    <xs:element name="databases">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="sqlite" minOccurs="0" maxOccurs="unbounded">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="flush">
+                                <xs:complexType>
+                                    <xs:attribute name="age" type="PeriodString" use="required"/>
+                                    <xs:attribute name="batchsize" type="xs:positiveInteger" use="required"/>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="idleclose" minOccurs="0"/>
+                            <xs:element name="rollover">
+                                <xs:complexType>
+                                    <xs:simpleContent>
+                                        <xs:extension base="nonEmptyString">
+                                            <xs:attribute name="count" type="xs:positiveInteger" use="required"/>
+                                            <xs:attribute name="unit" use="required">
+                                                <xs:simpleType>
+                                                    <xs:restriction base="xs:string">
+                                                        <xs:enumeration value="minutes"/>
+                                                        <xs:enumeration value="hours"/>
+                                                        <xs:enumeration value="days"/>
+                                                        <xs:enumeration value="weeks"/>
+                                                        <xs:enumeration value="months"/>
+                                                        <xs:enumeration value="years"/>
+                                                    </xs:restriction>
+                                                </xs:simpleType>
+                                            </xs:attribute>
+                                        </xs:extension>
+                                    </xs:simpleContent>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="table" type="tableType" maxOccurs="unbounded"/>
+                        </xs:sequence>
+                        <xs:attribute name="id" type="nonEmptyString" use="required"/>
+                        <xs:attribute name="path" type="nonEmptyString" use="required"/>
+                    </xs:complexType>
+                    <xs:unique name="uniqueTableName">
+                        <xs:selector xpath="table"/>
+                        <xs:field xpath="@name"/>
+                    </xs:unique>
+                </xs:element>
+                <xs:element name="server" minOccurs="0" maxOccurs="unbounded">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="flush">
+                                <xs:complexType>
+                                    <xs:attribute name="age" type="nonEmptyString" use="required"/>
+                                    <xs:attribute name="batchsize" type="xs:positiveInteger" use="required"/>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="idleclose" minOccurs="0"/>
+                            <xs:element name="table" type="tableType" maxOccurs="unbounded"/>
+                        </xs:sequence>
+                        <xs:attribute name="id" type="nonEmptyString" use="required"/>
+                        <xs:attribute name="type" use="required">
+                            <xs:simpleType>
+                                <xs:restriction base="xs:string">
+                                    <xs:enumeration value="mssql"/>
+                                    <xs:enumeration value="mysql"/>
+                                    <xs:enumeration value="mariadb"/>
+                                    <xs:enumeration value="postgresql"/>
+                                </xs:restriction>
+                            </xs:simpleType>
+                        </xs:attribute>
+                    </xs:complexType>
+                    <xs:unique name="uniqueSTableName">
+                        <xs:selector xpath="table"/>
+                        <xs:field xpath="@name"/>
+                    </xs:unique>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>
