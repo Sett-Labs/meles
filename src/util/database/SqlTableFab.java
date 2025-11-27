@@ -143,8 +143,8 @@ public class SqlTableFab {
                         if (!doInteger(rtvals, ref, store, col, tableName))
                             return null;
                     }
-                    case UTCDTNOW -> doUtcdtNow(rtvals, store);
-                    case LOCALDTNOW -> doLocaldtNow(rtvals, store);
+                    case UTCDTNOW -> doUtcdtNow( store, col.title,tableName);
+                    case LOCALDTNOW -> doLocaldtNow( store, col.title, tableName);
                     case TEXT, DATETIME -> {
                         var v = rtvals.getTextVal(ref);
                         if (v.isPresent()) {
@@ -204,26 +204,14 @@ public class SqlTableFab {
         return true;
     }
 
-    private static void doLocaldtNow(Rtvals rtvals, ValStore store) {
-        var v = rtvals.getTextVal("meles_localdt");
-        if (v.isPresent()) {
-            store.addAbstractVal(v.get());
-        } else {
-            var tv = TextVal.newLocalTimeVal("meles", "localdt");
-            rtvals.addTextVal(tv);
-            store.addAbstractVal(tv);
-        }
+    private static void doLocaldtNow( ValStore store, String columnTitle, String tableName) {
+        var tv = TextVal.newLocalTimeVal(tableName, columnTitle);
+        store.addAbstractVal(tv);
     }
 
-    private static void doUtcdtNow(Rtvals rtvals, ValStore store) {
-        var v = rtvals.getTextVal("meles_utcdt");
-        if (v.isPresent()) {
-            store.addAbstractVal(v.get());
-        } else {
-            var tv = TextVal.newUTCTimeVal("meles", "utcdt");
-            rtvals.addTextVal(tv);
-            store.addAbstractVal(tv);
-        }
+    private static void doUtcdtNow( ValStore store, String columnTitle, String tableName) {
+        var tv = TextVal.newUTCTimeVal(tableName, columnTitle);
+        store.addAbstractVal(tv);
     }
 
     /**

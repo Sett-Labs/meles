@@ -59,19 +59,19 @@ public class SqlColumn {
 
     public Object fetchData(String id, String val) {
         try {
-            if (server) {
-                var res = switch (type) {
-                    case LOCALDTNOW -> LocalDateTime.now();
-                    case UTCDTNOW -> OffsetDateTime.now(ZoneOffset.UTC);
-                    case DATETIME -> {
-                        var ts = TimeTools.parseDateTime(val, "yyyy-MM-dd HH:mm:ss.SSS");
-                        yield (Object) ts;
-                    }
-                    default -> null;
-                };
-                if (res != null)
-                    return res;
-            }
+           // if (server) {
+            var res = switch (type) {
+                case LOCALDTNOW -> LocalDateTime.now();
+                case UTCDTNOW -> OffsetDateTime.now(ZoneOffset.UTC);
+                case DATETIME -> {
+                    var ts = TimeTools.parseDateTime(val, "yyyy-MM-dd HH:mm:ss.SSS");
+                    yield (Object) ts;
+                }
+                default -> null;
+            };
+            if (res != null)
+                return res;
+            //}
 
             if (type == SqlColumn.COLUMN_TYPE.EPOCH)
                 return Instant.now().toEpochMilli();

@@ -393,7 +393,8 @@ public class SqlTable{
             SqlColumn col = columns.get(colPos);
             index++;
 
-            Object val = col.fetchData(id, rt.get(index));
+            var st = rt.get(index);
+            Object val = st==null?col.fetchData(id, st):st;
             if (val != null) {
                 record[index] = val;
             }else{
