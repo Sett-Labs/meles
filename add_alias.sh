@@ -1,8 +1,7 @@
 #!/bin/bash
-echo "alias meles_restart='sudo systemctl restart meles'" >> ~/.bashrc
-echo "alias meles_start='sudo systemctl start meles'" >> ~/.bashrc
-echo "alias meles_stop='sudo systemctl stop meles'" >> ~/.bashrc
-echo "alias meles_log='sudo journalctl -u meles.service'" >> ~/.bashrc
-echo "alias meles_track='sudo journalctl -u meles.service -f'" >> ~/.bashrc
-echo "alias meles='telnet localhost 2323'" >> ~/.bashrc
-echo "alias das='telnet localhost 2323'" >> ~/.bashrc
+echo "alias meles_restart='sudo systemctl restart meles'" >> ~/.bash_aliases
+echo "alias meles_start='sudo systemctl start meles'" >> ~/.bash_aliases
+echo "alias meles_stop='sudo systemctl stop meles'" >> ~/.bash_aliases
+echo "alias meles_log='sudo journalctl -u meles.service'" >> ~/.bash_aliases
+echo "alias meles_track='sudo journalctl -u meles.service -f'" >> ~/.bash_aliases
+echo "alias meles='telnet localhost 2323'" >> ~/.bash_aliases
