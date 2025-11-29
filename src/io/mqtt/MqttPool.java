@@ -82,12 +82,19 @@ public class MqttPool implements Commandable {
             var worker = new MqttWorker(id, address, clientId, rtvals, eventLoopGroup, publishService);
             var ttl = TimeTools.parsePeriodStringToMillis( broker.attr("ttl",broker.peekAt("ttl").value("")));
             worker.setTTL(ttl);
+            worker.setAllowProperties( broker.peekAt("allowproperties").value(true) );
 
             // Find the topics to subscribe to
             if( broker.hasPeek("subscriptions") ){
                 broker.usePeek();
+
+                var def = broker.attr("roottopic","");
+                if( !def.isEmpty() && !def.endsWith("/") )
+                    def+="/";
+
                 if( broker.hasPeek("topic")){
-                    broker.digOut("topic").forEach( sub -> worker.addSubscription(sub.value("")));
+                    String finalDef = def;
+                    broker.digOut("topic").forEach(sub -> worker.addSubscription(finalDef +sub.value("")));
                     broker.goUp();
                 }
                 broker.goUp();
@@ -166,6 +173,11 @@ public class MqttPool implements Commandable {
             case "test" -> {
                 mqttWorkers.values().forEach( w -> w.addWork("dice/d20","10") );
                 yield "Testing";
+            }
+            case "" -> {
+                if( wr != null )
+                    mqttWorkers.values().forEach( worker -> worker.removeWritable(wr));
+                yield "";
             }
             default -> {
                 var worker = mqttWorkers.get(cmd);
@@ -295,9 +307,9 @@ public class MqttPool implements Commandable {
 
         String[] topVal = args[2].split(":");
         var opt = rtvals.getBaseVal(topVal[1]);
-        opt.ifPresent(baseVal -> worker.addWork( MqttWork.toTopic(topVal[0]).data(baseVal)));
+        opt.ifPresent(baseVal -> worker.addWork( MqttWork.toTopic(topVal[0]).payload(baseVal)));
         if( opt.isEmpty() ) {
-            worker.addWork( MqttWork.toTopic(topVal[0]).data(topVal[1]) );
+            worker.addWork( MqttWork.toTopic(topVal[0]).payload(topVal[1]) );
             return "No such rtval, assumed direct data.";
         }
         return "Data send to " + args[0];

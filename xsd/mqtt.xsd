@@ -18,9 +18,9 @@
                         <xs:all>
                             <xs:element name="address" type="mqttAddress"  />
                             <xs:element name="clientid" type="nonEmptyString" minOccurs="0" />
-                            <xs:element name="defaulttopic" type="nonEmptyString"  />
                             <xs:element name="subscribe" type="nonEmptyString"  />
-                            <xs:element name="store" >
+                            <xs:element name="allowproperties" type="extbool"  />
+                            <xs:element name="store" minOccurs="0">
                                 <xs:complexType>
                                     <xs:sequence>
                                         <xs:element name="group" type="nonEmptyString" maxOccurs="unbounded" >
@@ -35,11 +35,12 @@
                                     <xs:attribute name="generate" type="nonEmptyString" />
                                 </xs:complexType>
                             </xs:element>
-                            <xs:element name="subscriptions" >
+                            <xs:element name="subscriptions" minOccurs="0" >
                                 <xs:complexType>
                                     <xs:sequence>
                                         <xs:element name="topic" type="xs:string" maxOccurs="unbounded" />
                                     </xs:sequence>
+                                    <xs:attribute name="roottopic" type="nonEmptyString" />
                                 </xs:complexType>
                             </xs:element>
                         </xs:all>

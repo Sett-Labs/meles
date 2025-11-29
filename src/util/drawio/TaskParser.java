@@ -566,6 +566,11 @@ public class TaskParser {
                 mb.setExpireTime( ms );
             }
         }
+        if( cell.getParam("includetimestamp",false) )
+            mb.includeTimestamp();
+        if( cell.getParam("includeunit",false) )
+            mb.includeUnit();
+
         mb.setEventLoop( tools.eventLoop() );
         mb.id(blockId);
         addNext(cell, mb, tools, "next", "pass", "yes", "ok");

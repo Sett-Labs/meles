@@ -15,14 +15,16 @@ import java.util.concurrent.TimeUnit;
 
 public class MqttBlock extends AbstractBlock implements Writable {
 
-    private String topic;
-    private BaseVal val;
+    private final String topic;
+    private final BaseVal val;
     private Writable broker;
-    private String brokerId;
+    private final String brokerId;
     private long expireTime=0;
 
     private EventLoopGroup eventLoop;
     private ScheduledFuture<?> failFuture;
+    private boolean includeTimestamp =false;
+    private boolean includeUnit =false;
 
     public MqttBlock(String brokerId,String topic,  BaseVal val) {
         this.brokerId=brokerId;
@@ -34,11 +36,18 @@ public class MqttBlock extends AbstractBlock implements Writable {
         this.topic=topic;
         this.val = TextVal.newVal("meles","temp").value(val);
     }
+
     public void setEventLoop(EventLoopGroup eventLoop) {
         this.eventLoop = eventLoop;
     }
     public void setExpireTime( long ms ){
         this.expireTime=ms;
+    }
+    public void includeTimestamp(){
+        includeTimestamp =true;
+    }
+    public void includeUnit(){
+        includeUnit =true;
     }
     @Override
     public boolean start() {
@@ -52,7 +61,17 @@ public class MqttBlock extends AbstractBlock implements Writable {
         return true;
     }
     private void tryPub(){
-        broker.giveObject("pub", MqttWork.toTopic(topic).data(val).inform(this).expiresAfter((int)expireTime, ChronoUnit.MILLIS) );
+        var work = MqttWork.toTopic(topic)
+                            .payload(val)
+                            .qos(1)
+                            .inform(this)
+                            .expiresAfter((int)expireTime, ChronoUnit.MILLIS);
+        if( includeTimestamp )
+            work.includeTimestamp();
+        if( includeUnit )
+            work.addUserProperty("unit",val.unit());
+
+        broker.giveObject("pub",  work );
         if(eventLoop!=null && expireTime!=0)
             failFuture = eventLoop.schedule(()->this.doAltRoute(true), expireTime, TimeUnit.MILLISECONDS);
     }

@@ -5,10 +5,13 @@ import io.Writable;
 import io.netty.channel.EventLoopGroup;
 import io.telnet.TelnetCodes;
 import org.apache.commons.lang3.math.NumberUtils;
-import org.eclipse.paho.client.mqttv3.*;
-import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
+import org.eclipse.paho.mqttv5.client.*;
+
+import org.eclipse.paho.mqttv5.client.persist.MemoryPersistence;
+import org.eclipse.paho.mqttv5.common.MqttException;
+import org.eclipse.paho.mqttv5.common.MqttMessage;
+import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
 import org.tinylog.Logger;
-import util.LookAndFeel;
 import util.data.vals.*;
 import util.tools.TimeTools;
 import worker.Datagram;
@@ -36,12 +39,12 @@ import java.util.concurrent.TimeUnit;
  * For now nothing happens with the connection when no work is present and no subscriptions are made, an
  * option is to disconnect.
  */
-public class MqttWorker implements MqttCallbackExtended,Writable {
+public class MqttWorker implements MqttCallback,Writable {
 	// Queue that holds the messages to publish
 	private final BlockingQueue<MqttWork> mqttQueue = new LinkedBlockingQueue<>();
 	private MqttClient client = null;
 	private final MemoryPersistence persistence = new MemoryPersistence();
-	MqttConnectOptions connOpts = null;
+	MqttConnectionOptions connOpts = null;
 
 	private String id; // Name/if/title for this worker
 	private String brokerAddress = ""; // The address of the broker
@@ -49,8 +52,6 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
 	private boolean publishing = false; // Flag that shows if the worker is publishing data
 	private boolean connecting = false; // Flag that shows if the worker is trying to connect to the broker
 
-	//private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(); // Scheduler for the publish and
-																						// connect class
 	private final Map<String, BaseVal> valReceived = new HashMap<>(); // Map containing all the subscriptions
 	private final ArrayList<String> subscriptions = new ArrayList<>();
 	private final ArrayList<Long> subsRecStamp = new ArrayList<>();
@@ -64,7 +65,10 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
 	private final EventLoopGroup eventLoopGroup;
 	private final ScheduledExecutorService publishService;
 
-	public MqttWorker(String id, String address, String clientId, Rtvals rtvals, EventLoopGroup eventLoopGroup, ScheduledExecutorService publishService) {
+    private boolean allowProperties = true;
+
+	public MqttWorker(String id, String address, String clientId, Rtvals rtvals,
+                      EventLoopGroup eventLoopGroup, ScheduledExecutorService publishService) {
 		this.id=id;
 		setBrokerAddress(address);
 		this.clientId=clientId;
@@ -94,7 +98,9 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
 	public void setID(String id) {
 		this.id = id;
 	}
-
+    public void setAllowProperties( boolean allow){
+        this.allowProperties=allow;
+    }
 	/**
 	 * Get the address of the broker
 	 *
@@ -147,8 +153,8 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
 	 */
 	public void applySettings() {
 
-		connOpts = new MqttConnectOptions();
-		connOpts.setCleanSession(false);
+		connOpts = new MqttConnectionOptions();
+		connOpts.setCleanStart(false);
 		if( !clientId.isBlank() )
 			connOpts.setUserName(clientId);
 		connOpts.setAutomaticReconnect(true); //works
@@ -157,7 +163,7 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
 			if( client != null ){
 				client.disconnect();
 			}
-			client = new MqttClient( brokerAddress, MqttClient.generateClientId(), persistence);
+			client = new MqttClient( brokerAddress, clientId.replace("{ts}",String.valueOf(Instant.now().toEpochMilli())), persistence);
 			Logger.info( id+"(mqtt) -> Created client");
 			client.setTimeToWait(10000);
 			client.setCallback(this);
@@ -178,7 +184,8 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
 	 * @return 0 if failed to add, 1 if ok, 2 if added but not send to broker
 	 */
 	public int addSubscription( String topic ){
-		return addSubscription( topic,null );
+
+        return addSubscription( topic,null );
 	}
 	/**
 	 * Subscribe to a given topic on the associated broker and store the received data in the val.
@@ -282,7 +289,7 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
 		} else{
 			try {
 				Logger.info( id+"(mqtt) -> Subscribing to "+ topic);
-				client.subscribe( topic );
+				client.subscribe( topic, 1 );
 				return 1;
 			} catch (MqttException e) {
 				Logger.error(e);
@@ -427,7 +434,12 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
         }
 	}
 
-	/**
+    @Override
+    public void deliveryComplete(IMqttToken iMqttToken) {
+
+    }
+
+    /**
 	 * Add a target for the received data
 	 * @param wr The writable to write to
 	 */
@@ -481,16 +493,23 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
 		disconnect();
 	}
 	@Override
-	public void connectionLost(Throwable cause) {
+    public void disconnected(MqttDisconnectResponse disconnectResponse){
 		if (!mqttQueue.isEmpty() && !subscriptions.isEmpty()) {
 			Logger.info( id+"(mqtt) -> Connection lost but still work to do, reconnecting...");
 			submitConnector(0,0);
 		}else{
 			connecting=false;
+            var cause = disconnectResponse.getException();
 			Logger.warn( id+"(mqtt) -> "+cause.getMessage() + "->" + cause);
 		}
 	}
-	@Override
+
+    @Override
+    public void mqttErrorOccurred(MqttException e) {
+
+    }
+
+    @Override
 	public void connectComplete(boolean reconnect, String serverURI) {
 		if( reconnect ){
 			Logger.info( id+"(mqtt) -> Reconnecting." );
@@ -502,7 +521,7 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
 		try {
 			for( String sub:subscriptions ){
 				subs=sub; // Purely to know when the error occurred
-				client.subscribe( sub );
+				client.subscribe( sub,1 );
 				Logger.info(id+"(mqtt) -> Subscribed to "+sub);
 				int index = subscriptions.indexOf(sub);
 				if( index != -1)
@@ -514,7 +533,13 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
 		if( !mqttQueue.isEmpty() )
 			submitPublisher();
 	}
-	/**
+
+    @Override
+    public void authPacketArrived(int i, MqttProperties mqttProperties) {
+
+    }
+
+    /**
 	 * Small class that handles connection to the broker, so it's not blocking.
 	 */
 	private class Connector implements Runnable {
@@ -532,7 +557,7 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
                 return;
             }
             try {
-                client.connect(connOpts);
+                client.connect( connOpts );
                 Logger.info(id + "(mqtt) -> Connected");
             } catch (MqttException me) {
                 attempt++;
@@ -586,6 +611,10 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
                         work.getOrigin().ifPresent( ori->ori.writeLine("mqtt","expired") );
                         continue;
                     }
+                    var message = work.getMessage();
+                    if( allowProperties )
+                        message.setProperties(work.getProperties());
+
 					client.publish( work.getTopic(), work.getMessage() );
                     work.getOrigin().ifPresent( ori->ori.writeLine("mqtt","published") );
 				} catch (InterruptedException e) {
@@ -605,10 +634,6 @@ public class MqttWorker implements MqttCallbackExtended,Writable {
 			}
 			publishing=false;
 		}
-	}
-	@Override
-	public void deliveryComplete(IMqttDeliveryToken token) {
-		//Logger.warn("This shouldn't be called...");
 	}
 	/* ***************************************** W R I T A B L E  ******************************************************/
 	@Override
