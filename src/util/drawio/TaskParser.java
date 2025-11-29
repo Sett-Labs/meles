@@ -215,7 +215,11 @@ public class TaskParser {
             Logger.error(blockId + " -> ConditionBlock without an expression specified.");
             return null;
         }
-        var cb = ConditionBlock.build(cell.getParam("expression", ""), tools.rtvals, null);
+        var expr = cell.getParam("expression","");
+        if( id.contains("_post@")||id.contains("_pre@") ){
+            expr = RtvalsParser.normalizeExpression(expr,"justrandom");
+        }
+        var cb = ConditionBlock.build(expr, tools.rtvals, null);
         cb.ifPresent(block -> {
             block.id(blockId);
             var target = cell.getArrowTarget("update");

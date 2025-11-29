@@ -208,7 +208,7 @@ public class RtvalsParser {
         }
     }
 
-    private static String normalizeExpression(String exp, String label) {
+    public static String normalizeExpression(String exp, String label) {
         exp = exp.replace(label, "i0"); // alter so it get i0
         exp = exp.replace("new", "i0");
         exp = exp.replace("old", "i1"); // alter so it get i1 instead of old
