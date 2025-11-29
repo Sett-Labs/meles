@@ -47,7 +47,21 @@ public class LogBlock extends AbstractBlock {
             case WARN -> Logger.tag("TASK").warn(m);
             case ERROR -> Logger.tag("TASK").error(m);
         }
-        doNext();
+        doNext(input);
         return true;
+    }
+    void doNext(double... input) {
+        if (next != null) {
+            if (next instanceof ConditionBlock cb) {
+                cb.start(input);
+            } else if (next instanceof LogBlock lb) {
+                lb.start(input);
+            } else if (next instanceof MathBlock mb) {
+                mb.start(input);
+            } else {
+                next.start();
+            }
+        }
+        sendCallback(id() + " -> OK");
     }
 }

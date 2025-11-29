@@ -20,4 +20,14 @@ public class MathBlock extends AbstractBlock {
         doNext();
         return true;
     }
+    public boolean start(double... input) {
+        if(input.length>=3) {
+            eval.eval(input[0], input[1], input[2]);
+        }else{
+            eval.eval(0,0,0);
+        }
+        clean = false;
+        doNext();
+        return true;
+    }
 }

@@ -30,6 +30,8 @@ public class RealVal extends BaseVal implements NumericVal {
         var pre = preCheck.start(value, this.value);
         if (ignorePre || pre) {
             var res = math.eval(value, this.value, 0.0);
+            if( ignorePost )
+                this.value = res;
             var post = postCheck.start(value, this.value, res);
             if (ignorePost || post) {
                 this.value = res;

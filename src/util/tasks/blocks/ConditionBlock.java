@@ -5,6 +5,7 @@ import util.data.vals.FlagVal;
 import util.data.vals.NumericVal;
 import util.data.vals.Rtvals;
 import util.evalcore.Evaluator;
+import util.evalcore.LogEvaluatorDummy;
 import util.evalcore.ParseTools;
 
 import java.util.ArrayList;
@@ -29,7 +30,11 @@ public class ConditionBlock extends AbstractBlock {
             return Optional.empty();
         return Optional.of(new ConditionBlock(logEvalOpt));
     }
-
+    public static ConditionBlock fakeBlock( AbstractBlock next){
+        var b = new ConditionBlock( new LogEvaluatorDummy() );
+        b.addNext(next);
+        return b;
+    }
     public void setFlag(FlagVal flag) {
         this.flag = flag;
     }
@@ -61,6 +66,8 @@ public class ConditionBlock extends AbstractBlock {
                 cb.start(input);
             } else if (next instanceof LogBlock lb) {
                 lb.start(input);
+            } else if (next instanceof MathBlock mb) {
+                mb.start(input);
             } else {
                 next.start();
             }

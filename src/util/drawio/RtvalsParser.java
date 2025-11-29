@@ -288,13 +288,22 @@ public class RtvalsParser {
                 }
             }
         }
+        if( valcell==null)
+            return null;
+
         // Post check
-        if (valcell.cell().hasArrow("next")) { // Find the post check if any
+        if ( valcell.cell().hasArrow("next")) { // Find the post check if any
             var postCheck = valcell.cell().getArrowTarget("next");
             var exp = postCheck.getParam("expression", "");
             postCheck.addParam("expression", normalizeExpression(exp, label));
+
             var block = TaskParser.createBlock(postCheck, tools, valcell.val().id() + "_post");
-            valcell.val().setPostCheck((ConditionBlock) block, true);
+            if( block instanceof ConditionBlock cb) {
+                valcell.val().setPostCheck(cb, true);
+            }else{ // Create a fake conditionblock?
+                valcell.val().setPostCheck(ConditionBlock.fakeBlock(block), true);
+            }
+
         }
         // At this post the precondition should be taken care off... now it's the difficult stuff like symbiote etc
         if (valcell.cell().hasArrow("derive")) {
