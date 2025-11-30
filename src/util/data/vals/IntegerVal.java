@@ -69,7 +69,7 @@ public class IntegerVal extends BaseVal implements NumericVal {
         return defValue;
     }
     public String asString() {
-        return String.valueOf(value);
+        return String.valueOf(value());
     }
 
     @Override
