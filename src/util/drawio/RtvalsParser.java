@@ -43,6 +43,21 @@ public class RtvalsParser {
 
         for (var entry : cells.entrySet()) {
             var cell = entry.getValue();
+
+            var opt = Drawio.findTargetingCell(cells,cell,"derive");
+            if( opt.isPresent() ){
+                Logger.info("Origin is a "+opt.get().type );
+                if( opt.get().type.equals("integerval")){
+                    var validIntRed = Reducer.isValidIntegerReducer(cell.getParam("reducer",""));
+                    if( validIntRed && cell.type.equals("realval") ){
+                        cell.type = "integerval";
+                    }
+                }
+                var group = cell.getParam("group","");
+                if( group.isEmpty() || group.equals("??") ) // If no group was provided, give it the same as origin
+                    cell.setParam("group",opt.get().getParam("group",group));
+            }
+            Logger.info( "Parsing "+cell.type +" " +cell.getParam("name",""));
             switch (cell.type) {
                 case "realval" -> addToValsIfNew(doRealVal(cell, tools), cell, vals);
                 case "integerval" -> addToValsIfNew(doIntegerVal(cell, tools), cell, vals);
@@ -86,10 +101,13 @@ public class RtvalsParser {
             rv.unit(unit);
             rv.defValue(cell.getParam("def", rv.defValue()));
         } else {
-            var reducer = Reducer.getDoubleReducer(cell.getParam("reducer", "avg"), cell.getParam("def", 0), window);
+            var reducerType = cell.getParam("reducer", "avg");
+            var defValue = cell.getParam("def", 0.0);
+            var scale = cell.getParam("scale", -1);
+            var reducer = Reducer.getDoubleReducer( reducerType, defValue, window, (int)Math.pow(10,scale) );
             var ra = new RealValAggregator(group, name, unit, reducer, window);
-            ra.setScale(cell.getParam("scale", -1));
-            Logger.info("Building RealValAggregator " + ra.id());
+            ra.setScale( scale );
+            Logger.info("Building RealValAggregator " + ra.id() + "of type "+reducer );
             rv = ra;
         }
         return rv;
@@ -115,7 +133,6 @@ public class RtvalsParser {
         } else {
             var reducer = Reducer.getIntegerReducer(cell.getParam("reducer", "sum"), cell.getParam("def", 0), window);
             var ri = new IntegerValAggregator(group, name, unit, reducer, window);
-
             Logger.info("Building IntegerValAggregator " + ri.id());
             iv = ri;
         }
@@ -348,21 +365,30 @@ public class RtvalsParser {
             if (math != null) {
                 valcell.val().setMath(math);
             } else if (!builtin.isEmpty()) {
-                if (target.type.startsWith("real")) {
-                    if (Builtin.isValidDoubleProc(builtin)) {
-                        valcell.val().setMath(Builtin.getDoubleFunction(builtin, scale));
-                    } else {
-                        Logger.error("Builtin " + builtin + " not recognized as a valid function.");
-                        return null;
+                if( target.getParam("window",-1)!=0 ){ // Aggregator
+                    if( Builtin.isValidDoubleProc(builtin) ){
+
+                    }else if( Builtin.isValidIntProc(builtin) ){
+
                     }
-                } else {
-                    if (Builtin.isValidIntProc(builtin)) {
-                        valcell.val().setMath(Builtin.getIntFunction(builtin));
+                }else{
+                    if (target.type.startsWith("real")) {
+                        if (Builtin.isValidDoubleProc(builtin)) {
+                            valcell.val().setMath(Builtin.getDoubleFunction(builtin, scale));
+                        } else {
+                            Logger.error("Builtin " + builtin + " not recognized as a valid function.");
+                            return null;
+                        }
                     } else {
-                        Logger.error("Builtin " + builtin + " not recognized as a valid function.");
-                        return null;
+                        if (Builtin.isValidIntProc(builtin)) {
+                            valcell.val().setMath(Builtin.getIntFunction(builtin));
+                        } else {
+                            Logger.error("Builtin " + builtin + " not recognized as a valid function.");
+                            return null;
+                        }
                     }
                 }
+
             }
         }
         return valcell;

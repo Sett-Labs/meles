@@ -192,7 +192,17 @@ public class Drawio {
         input = TAG_PATTERN.matcher(input).replaceAll("");
         return input.replace("#nl#", "\r\n").trim();
     }
+    public static Optional<DrawioCell> findTargetingCell(HashMap<String, Drawio.DrawioCell> cells, Drawio.DrawioCell cell, String label ){
+        var drawId = cell.drawId;
 
+        for( var ori : cells.values() ){
+            if( ori==null)
+                continue;
+            if( ori.hasArrowTarget(drawId) )
+                return Optional.of(ori);
+        }
+        return Optional.empty();
+    }
     public static class DrawioCell {
         String drawId;
         String type;
