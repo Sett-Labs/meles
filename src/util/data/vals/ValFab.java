@@ -1,10 +1,8 @@
 package util.data.vals;
 
-import io.netty.channel.EventLoopGroup;
 import org.tinylog.Logger;
 import util.data.procs.Builtin;
 import util.data.procs.Reducer;
-import util.drawio.TaskParser;
 import util.evalcore.MathFab;
 import util.tasks.TaskManagerFab;
 import util.tasks.blocks.AbstractBlock;

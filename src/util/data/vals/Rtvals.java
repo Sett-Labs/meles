@@ -50,8 +50,8 @@ public class Rtvals implements Commandable {
                 ValFab.digRealVals(d, groupName, realVals, this);
                 ValFab.digIntegerVals(d, groupName, integerVals, this);
 
-                flagVals.putAll(ValFab.digFlagVals(d, groupName, this ));
-                textVals.putAll(ValFab.digTextVals(d, groupName));
+                flagVals.putAll( ValFab.digFlagVals(d, groupName, this ) );
+                textVals.putAll( ValFab.digTextVals(d, groupName) );
             });
             dig.goUp();
         }
@@ -158,6 +158,13 @@ public class Rtvals implements Commandable {
         if (iv == null) {
             Logger.error("Invalid IntegerVal received, won't try adding it");
             return null;
+        }
+        if( iv instanceof IntegerValSymbiote ){
+            System.out.println("Received symbiote, remove the integer that it encapsulates");
+            var old = integerVals.get(iv.id());
+            if( ! (old instanceof IntegerValSymbiote) && old !=null ){
+                integerVals.remove(iv.id());
+            }
         }
         integerVals.putIfAbsent(iv.id(), iv);
         return integerVals.get(iv.id());

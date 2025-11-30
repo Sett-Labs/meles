@@ -266,7 +266,6 @@ public class Drawio {
         public boolean hasArrowTarget(String id) {
             for (var arrow : arrows.values()) {
                 if( arrow == null ){
-                    Logger.error("Error lookup for "+id+" encountered a null arrow");
                     continue;
                 }
                 if (arrow.drawId.equals(id))

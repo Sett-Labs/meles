@@ -18,8 +18,8 @@ public class IntegerValSymbiote extends IntegerVal {
         this.level = level;
         this.host = host;
     }
-
-    public boolean update(double val) {
+    @Override
+    public boolean update(int val) {
         var result = host.update(val);
         this.value = host.value();
 

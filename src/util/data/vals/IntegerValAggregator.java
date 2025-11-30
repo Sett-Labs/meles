@@ -28,7 +28,6 @@ public class IntegerValAggregator extends IntegerVal {
     public boolean update(int value) {
         window[currentIndex] = value;
         currentIndex = (currentIndex + 1) % windowSize;
-        Logger.info("Added val to aggregator");
         if (currentIndex == 0)
             filled = true;
         return false;
