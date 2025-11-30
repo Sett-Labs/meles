@@ -94,7 +94,7 @@ public class ValFab {
                 rv.setMath(Builtin.getDoubleFunction(dig.attr("builtin", ""), dig.attr("scale", -1)));
             }
         } else {
-            var reducer = Reducer.getDoubleReducer(dig.attr("reducer", "avg"), def, window);
+            var reducer = Reducer.getDoubleReducer(dig.attr("reducer", "avg"), def, window,dig.attr("scale", 100));
             var ra = new RealValAggregator(base.group, base.name, base.unit, reducer, window);
             ra.setScale(dig.attr("scale", -1));
             Logger.info("Building RealValAggregator " + ra.id());
