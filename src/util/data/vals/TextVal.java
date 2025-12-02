@@ -3,7 +3,7 @@ package util.data.vals;
 import util.tools.TimeTools;
 
 public class TextVal extends BaseVal {
-    String value, defValue;
+    String value="", defValue="";
 
     private enum TYPE {STATIC, LOCALDT, UTCDT}
 
@@ -24,6 +24,12 @@ public class TextVal extends BaseVal {
 
     public static TextVal newUTCTimeVal(String group, String name) {
         return new TextVal(group, name, "").makeUTCDT();
+    }
+
+    public static TextVal createDummy( String group, String name ){
+        var val = TextVal.newVal(group,name);
+        val.markAsDummy();
+        return val;
     }
 
     public TextVal makeLocalDT() {

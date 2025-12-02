@@ -3,7 +3,10 @@ package util.evalcore;
 import io.telnet.TelnetCodes;
 import org.tinylog.Logger;
 import util.data.procs.MathEvalForVal;
+import util.data.vals.BaseVal;
+import util.data.vals.FlagVal;
 import util.data.vals.NumericVal;
+import util.data.vals.ValUser;
 import util.tools.TimeTools;
 
 import java.math.BigDecimal;
@@ -17,7 +20,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class MathEvaluator extends BaseEvaluator implements MathEvalForVal, Evaluator {
-
 
     Function<BigDecimal[], BigDecimal>[] ops;
     BigDecimal[] scratchpad;
@@ -322,5 +324,6 @@ public class MathEvaluator extends BaseEvaluator implements MathEvalForVal, Eval
     public String getOriExpr() {
         return super.getOriginalExpression();
     }
+
 
 }

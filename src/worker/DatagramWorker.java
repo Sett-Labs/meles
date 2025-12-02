@@ -1,6 +1,6 @@
 package worker;
 
-import meles.CommandPool;
+import meles.CommandHub;
 import meles.Core;
 import io.telnet.TelnetCodes;
 import org.tinylog.Logger;
@@ -14,9 +14,9 @@ import java.util.concurrent.TimeUnit;
  * This class retrieves @see worker.Datagram s from a @see BlockingQueue. 
  * Next the content of @see Datagram is investigated and processed.
  */
-public class LabelWorker implements Runnable {
+public class DatagramWorker implements Runnable {
 	private boolean goOn=true;
-	protected CommandPool reqData;
+	protected CommandHub reqData;
 
 	ThreadPoolExecutor executor = new ThreadPoolExecutor(2,
 			Math.min(3, Runtime.getRuntime().availableProcessors()), // max allowed threads
@@ -29,7 +29,7 @@ public class LabelWorker implements Runnable {
 	 * Default constructor that gets a queue to use
 	 *
 	 */
-	public LabelWorker() {
+	public DatagramWorker() {
 		Logger.info("Using " + Math.min(3, Runtime.getRuntime().availableProcessors()) + " threads");
 	}
 
@@ -38,7 +38,7 @@ public class LabelWorker implements Runnable {
 	 *
 	 * @param commandPool The default BaseReq or extended one
 	 */
-	public void setCommandReq(CommandPool commandPool) {
+	public void setCommandReq(CommandHub commandPool) {
 		this.reqData = commandPool;
 	}
 

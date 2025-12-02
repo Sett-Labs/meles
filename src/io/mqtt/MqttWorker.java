@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit;
  * For now nothing happens with the connection when no work is present and no subscriptions are made, an
  * option is to disconnect.
  */
-public class MqttWorker implements MqttCallback,Writable {
+public class MqttWorker implements MqttCallback,Writable,ValUser {
 	// Queue that holds the messages to publish
 	private final BlockingQueue<MqttWork> mqttQueue = new LinkedBlockingQueue<>();
 	private MqttClient client = null;
@@ -67,6 +67,8 @@ public class MqttWorker implements MqttCallback,Writable {
 
     private boolean allowProperties = true;
 
+    private int oldId=-1;
+
 	public MqttWorker(String id, String address, String clientId, Rtvals rtvals,
                       EventLoopGroup eventLoopGroup, ScheduledExecutorService publishService) {
 		this.id=id;
@@ -76,7 +78,6 @@ public class MqttWorker implements MqttCallback,Writable {
 		this.eventLoopGroup = eventLoopGroup;
 		this.publishService = publishService;
 	}
-
 	private void submitConnector(int attempt, int seconds) {
         connecting = true;
         if( seconds==0 ) {
@@ -136,6 +137,10 @@ public class MqttWorker implements MqttCallback,Writable {
 			Logger.info(id+"(mqtt) -> Processing work: "+work);
 		}
 		mqttQueue.add(work);
+        if( client == null ) {
+            Logger.error("Adding work while client not initialized yet.");
+            return;
+        }
 		if (!client.isConnected()) { // If not connected, try to connect
             if (!connecting) {
 				submitConnector(0,0);
@@ -184,7 +189,6 @@ public class MqttWorker implements MqttCallback,Writable {
 	 * @return 0 if failed to add, 1 if ok, 2 if added but not send to broker
 	 */
 	public int addSubscription( String topic ){
-
         return addSubscription( topic,null );
 	}
 	/**
@@ -202,6 +206,7 @@ public class MqttWorker implements MqttCallback,Writable {
 		if( subscriptions.contains(topic) )
 			return 2;
 
+        Logger.info(id()+" -> Adding subscription to "+topic);
 		subscriptions.add(topic);
 		subsRecStamp.add(-1L);
 		if( val != null)
@@ -374,7 +379,8 @@ public class MqttWorker implements MqttCallback,Writable {
 
 		String load = new String(message.getPayload());	// Get the payload
 		if(debug)
-			Logger.info("Rec: "+topic+" load:"+load);
+			Logger.info("Rec: "+topic+" load:"+load +" id: "+message.getId() );
+
 		Logger.tag("RAW").warn(id+"\t"+topic+"\t"+load);  // Store it like any other received data
 
 		// Update data timestamps taking wildcards in account
@@ -398,6 +404,7 @@ public class MqttWorker implements MqttCallback,Writable {
         var key = storeTopic.substring(0, storeTopic.indexOf("#"));
         if (!(key.isEmpty() || topic.startsWith(key)))
             return;
+
         var split = topic.split("/"); // split it in parts, we only want last two
         if (split.length < 2) {
             Logger.warn(id + "(mqtt) -> Received topic, but less than two elements -> " + topic);
@@ -406,9 +413,9 @@ public class MqttWorker implements MqttCallback,Writable {
         var group = split[split.length - 2];
         var name = split[split.length - 1];
 
-		var val = rtvals.getBaseVal(group + "_" + name);
-        if (val.isPresent()) {
-            valReceived.put(topic, val.get());
+		var val = rtvals.getBaseVal(this,group + "_" + name);
+        if (!val.isDummy()) {
+            valReceived.put(topic, val);
             return;
         }
         // Figure out if its int,real or text?
@@ -416,19 +423,19 @@ public class MqttWorker implements MqttCallback,Writable {
             if (load.contains(".") || load.contains(",")) { // so real
                 var real = RealVal.newVal(group, name);
                 real.parseValue(load);
-                rtvals.addRealVal(real);
+                rtvals.addRealVal(this,real);
                 valReceived.put(topic, real);
                 Core.addToQueue(Datagram.system("mqtt:" + id + ",store,real," + real.id() + "," + topic));
             } else { // int
                 var i = IntegerVal.newVal(group, name);
                 i.parseValue(load);
-                rtvals.addIntegerVal(i);
+                rtvals.addIntegerVal(this,i);
                 valReceived.put(topic, i);
                 Core.addToQueue(Datagram.system("mqtt:" + id + ",store,int," + i.id() + "," + topic));
             }
         } else { // So text
             var txt = TextVal.newVal(group, name).value(load);
-            rtvals.addTextVal(txt);
+            rtvals.addTextVal(this,txt);
             valReceived.put(topic, txt);
             Core.addToQueue(Datagram.system("mqtt:" + id + ",store,txt," + txt.id() + "," + topic));
         }
@@ -444,7 +451,8 @@ public class MqttWorker implements MqttCallback,Writable {
 	 * @param wr The writable to write to
 	 */
 	public void registerWritable(Writable wr ){
-		if(!targets.contains(wr))
+		Logger.info(id()+" -> Received request from "+wr.id() );
+        if(!targets.contains(wr))
 			targets.add(wr);
 	}
 
@@ -454,6 +462,7 @@ public class MqttWorker implements MqttCallback,Writable {
 	 * @return True if it was removed.
 	 */
 	public boolean removeWritable( Writable wr ){
+        Logger.info(id()+" -> Received removal request from "+wr.id() );
 		return targets.remove(wr);
 	}
   	/* ***************************************** C O N N E C T  ***************************************************** */
@@ -664,5 +673,35 @@ public class MqttWorker implements MqttCallback,Writable {
         }else{
             Logger.error(id()+ "(MQTT) -> Unknown info received "+info);
         }
+    }
+    /* ***************************************** V A L U S E R  ******************************************************/
+    public boolean isWriter() {
+        return true;
+    }
+
+    @Override
+    public boolean provideVal(BaseVal val) {
+        for( var set : valReceived.entrySet() ){
+            var old = set.getValue();
+            if( old.getClass().isInstance( val ) || old instanceof AnyDummy) {
+                if( old.id().equals(val.id())){
+                    valReceived.put(set.getKey(),val);
+                    Logger.info("Replaced "+old.id());
+                }
+            }
+        }
+        return valReceived.values().stream().noneMatch(BaseVal::isDummy);
+    }
+    @Override
+    public String getValIssues() {
+        var join = new StringJoiner(";");
+        for( var val : valReceived.values() ) {
+            if( val.isDummy() )
+                join.add(val.id());
+        }
+        if( join.toString().isEmpty())
+            return "[mqttbroker:"+id()+" ok]";
+        return "[mqttbroker:"+id()+" needs "+join+"]";
+
     }
 }

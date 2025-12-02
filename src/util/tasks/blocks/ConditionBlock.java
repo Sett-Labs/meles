@@ -1,9 +1,7 @@
 package util.tasks.blocks;
 
 import org.tinylog.Logger;
-import util.data.vals.FlagVal;
-import util.data.vals.NumericVal;
-import util.data.vals.Rtvals;
+import util.data.vals.*;
 import util.evalcore.Evaluator;
 import util.evalcore.LogEvaluatorDummy;
 import util.evalcore.ParseTools;
@@ -11,7 +9,7 @@ import util.evalcore.ParseTools;
 import java.util.ArrayList;
 import java.util.Optional;
 
-public class ConditionBlock extends AbstractBlock {
+public class ConditionBlock extends AbstractBlock implements ValUser {
 
     Evaluator logEval;
     FlagVal flag;
@@ -81,5 +79,18 @@ public class ConditionBlock extends AbstractBlock {
         if(logEval==null)
             return "No valid LogEvaluator present.";
         return logEval.getInfo();
+    }
+
+    public boolean isWriter(){
+        return false;
+    }
+    public boolean provideVal( BaseVal newVal){
+        if( newVal instanceof FlagVal fv ){
+            if( fv.id().equals(flag.id())) {
+                flag = fv;
+                return true;
+            }
+        }
+        return false;
     }
 }

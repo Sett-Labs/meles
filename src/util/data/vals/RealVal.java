@@ -25,7 +25,11 @@ public class RealVal extends BaseVal implements NumericVal {
     public static RealVal newVal(String group, String name) {
         return new RealVal(group, name, "");
     }
-
+    public static RealVal createDummy( String group, String name ){
+        var val = RealVal.newVal(group,name);
+        val.markAsDummy();
+        return val;
+    }
     public boolean update(double value) {
         var pre = preCheck.start(value, this.value);
         if (ignorePre || pre) {

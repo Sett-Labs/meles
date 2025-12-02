@@ -5,18 +5,21 @@ import io.Writable;
 import io.mqtt.MqttWork;
 import io.netty.channel.EventLoopGroup;
 import org.tinylog.Logger;
+import util.data.vals.AnyDummy;
 import util.data.vals.BaseVal;
 import util.data.vals.TextVal;
+import util.data.vals.ValUser;
 import worker.Datagram;
 
 import java.time.temporal.ChronoUnit;
+import java.util.StringJoiner;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-public class MqttBlock extends AbstractBlock implements Writable {
+public class MqttBlock extends AbstractBlock implements Writable, ValUser {
 
     private final String topic;
-    private final BaseVal val;
+    private BaseVal val;
     private Writable broker;
     private final String brokerId;
     private long expireTime=0;
@@ -113,5 +116,29 @@ public class MqttBlock extends AbstractBlock implements Writable {
     @Override
     public boolean isConnectionValid() {
         return true;
+    }
+
+    public boolean isWriter(){
+        return false;
+    }
+    public boolean provideVal( BaseVal newVal ){
+        if( val == null) {
+            val = newVal;
+            return true;
+        }
+        if( val.getClass().isInstance(newVal) || val instanceof AnyDummy) {
+            if (val.id().equals(newVal.id())) {
+                val = newVal;
+                Logger.info(id() + " -> Received new val! " + newVal.id());
+                return true;
+            }
+        }
+        return false;
+    }
+    @Override
+    public String getValIssues() {
+        if( val.isDummy())
+            return "[mqttblock:"+id()+" needs "+val.id()+"]";
+        return "Ok";
     }
 }

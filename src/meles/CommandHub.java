@@ -27,7 +27,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.StringJoiner;
 
-public class CommandPool {
+public class CommandHub {
 
 	private final ArrayList<Commandable> stopCommandable = new ArrayList<>(); // the ones that 'stop' sending data
 	private final HashMap<String,Commandable> commandables = new HashMap<>(); // The regular ones

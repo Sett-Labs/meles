@@ -125,10 +125,12 @@ public class MqttPool implements Commandable {
                     }
                 });
             }
-            worker.applySettings();
             mqttWorkers.put(id,worker);
         });
         return true;
+    }
+    public void startWorkers(){
+        mqttWorkers.values().forEach(MqttWorker::applySettings);
     }
     private void processVal( MqttWorker worker, XMLdigger rtval ){
         var topic = rtval.attr("topic",rtval.peekAt("topic").value("")); // Attr or val
@@ -141,18 +143,20 @@ public class MqttPool implements Commandable {
             return;
 
         var gn = groupName.group() + "_" + groupName.name();
-        if (rtvals.hasBaseVal(gn)) {// doesn't exist yet, add it
-            var val = rtvals.getBaseVal(gn);
-            val.ifPresent(baseVal -> worker.addSubscription(topic, baseVal));
-        }else {
-            var val = ValFab.buildVal(rtval, groupName.group(), rtvals);
-            if (val != null) {
+        var val = rtvals.getBaseVal(worker,gn);
+        if (val.isDummy()) {// doesn't exist yet, add it
+            var made = ValFab.buildVal(rtval, groupName.group(), rtvals);
+            if (made != null) {
                 if (worker.addSubscription(topic, val) == 0) {
                     Logger.error(worker.id() + " (mqtt) -> Failed to add subscription to " + topic);
+                }else{
+                    rtvals.addBaseVal(worker,made);
                 }
             } else {
                 Logger.error(worker.id() + " (mqtt) -> Failed to read the rtval " + gn);
             }
+        }else {
+            worker.addSubscription(topic, val );
         }
     }
     @Override
@@ -249,9 +253,10 @@ public class MqttPool implements Commandable {
 
         return switch (args[1]) {
             case "subscribe" -> doSubscribeCmd(args,worker,fab);
+            case "subs" -> worker.getSubscriptions("\r\n");
             case "unsubscribe" -> doUnsubscribeCmd(args,worker,fab);
             case "send" -> doSendCmd( args, worker );
-            case "provide" -> doProvideCmd(args, fab);
+         //   case "provide" -> doProvideCmd(args, fab);
             case "generate" -> doGenerateCmd(args,worker,fab);
             case "stores" -> worker.getSubStoreInfo();
             case "store" -> doStoreCmd( args,fab );
@@ -306,14 +311,14 @@ public class MqttPool implements Commandable {
             return "! No proper topic:value given, got " + args[2] + " instead.";
 
         String[] topVal = args[2].split(":");
-        var opt = rtvals.getBaseVal(topVal[1]);
-        opt.ifPresent(baseVal -> worker.addWork( MqttWork.toTopic(topVal[0]).payload(baseVal)));
-        if( opt.isEmpty() ) {
+        var val = rtvals.getBaseVal(worker,topVal[1]);
+        if( val.isDummy() ){
             worker.addWork( MqttWork.toTopic(topVal[0]).payload(topVal[1]) );
             return "No such rtval, assumed direct data.";
         }
+        worker.addWork( MqttWork.toTopic(topVal[0]).payload(val.asString()));
         return "Data send to " + args[0];
-    }
+    }/*
     private String doProvideCmd( String[] args, XMLfab fab ){
         if (args.length < 3)
             return "! Wrong amount of arguments -> mqtt:id,provide,rtval<,topic>";
@@ -328,7 +333,7 @@ public class MqttPool implements Commandable {
             fab.attr("topic",topic);
         fab.build();
         return "Provide added";
-    }
+    }*/
     private String doGenerateCmd(String[] args, MqttWorker worker,XMLfab fab){
         if (args.length < 3)
             return "! Wrong amount of arguments -> mqtt:id,generate,topic";

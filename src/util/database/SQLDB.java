@@ -349,7 +349,7 @@ public class SQLDB extends Database implements TableInsert{
     public String getTableInfo(String eol){
         StringJoiner j = new StringJoiner(eol,"Info about "+id+eol,"");
         j.setEmptyValue("No tables stored.");
-        tables.values().forEach( table -> j.add(table.getInfo()));
+        tables.values().forEach( table -> j.add(table.getValIssues()));
         return j.toString();
     }
     /**
@@ -425,7 +425,7 @@ public class SQLDB extends Database implements TableInsert{
                 Logger.error(id+"(db) -> Error during table read: "+e.getErrorCode());
             }
         });
-        Logger.info(table.getInfo());
+        Logger.info(table.getValIssues());
     }
     /**
      * Actually create all the tables
@@ -546,7 +546,7 @@ public class SQLDB extends Database implements TableInsert{
                 .forEach(table -> {
                     SqlTableFab.buildTableStore(table, rtvals);
                     var allow = table.getAllowInsertFlag();
-                    var res = rtvals.addFlagVal(allow); // Only adds if absent, returns og flagval if it was absent
+                    var res = rtvals.addFlagVal(table,allow); // Only adds if absent, returns og flagval if it was absent
                     if (res != null)
                         table.setAllowInsertsFlag(res);
                 });

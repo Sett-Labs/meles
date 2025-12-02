@@ -3,6 +3,7 @@ package util.data.vals;
 public abstract class BaseVal {
 
     protected String name, group, unit;
+    protected boolean dummy=false;
 
     public BaseVal(String group, String name, String unit) {
         this.group = group;
@@ -43,6 +44,12 @@ public abstract class BaseVal {
         return unit;
     }
 
+    protected void markAsDummy(){
+        dummy=true;
+    }
+    public boolean isDummy(){
+        return dummy;
+    }
     /**
      * Get the id, which is group + underscore + name
      *

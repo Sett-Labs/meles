@@ -5,6 +5,7 @@ import org.tinylog.Logger;
 import util.data.vals.*;
 import util.evalcore.ParseTools;
 import util.math.MathUtils;
+import util.tasks.blocks.NoOpBlock;
 import util.tools.TimeTools;
 
 import java.util.ArrayList;
@@ -76,27 +77,25 @@ public class ValTools {
     }
 
     private static int findOrAddValue(String id, String type, Rtvals rtvals, ArrayList<NumericVal> nums, int offset) {
-        int index;
 
-        var value = switch (type) {
-            case "d", "double", "r", "real" -> rtvals.getRealVal(id);
-            case "int", "i" -> rtvals.getIntegerVal(id);
-            case "f", "flag", "b" -> rtvals.getFlagVal(id);
+        var val = switch (type) {
+            case "d", "double", "r", "real" -> rtvals.getRealVal(OneTimeValUser.get(),id);
+            case "int", "i" -> rtvals.getIntegerVal(OneTimeValUser.get(),id);
+            case "f", "flag", "b" -> rtvals.getFlagVal(OneTimeValUser.get(),id);
             default -> throw new IllegalArgumentException("Unknown type: " + type);
         };
-
-        if (value.isEmpty()) {
-            Logger.error("Couldn't find a " + type + " with id " + id);
-            return -1; // Or any other sentinel value indicating failure
+        int foundAt=-1;
+        for( int in = 0; in<nums.size();in++){
+            if( nums.get(in).id().equals(id) ) {
+                foundAt = in;
+                break;
+            }
         }
-
-        NumericVal val = value.get();
-        index = nums.indexOf(val);
-        if (index == -1) {
+        if (foundAt == -1) {
             nums.add(val);
-            index = nums.size() - 1;
+            foundAt = nums.size() - 1;
         }
-        return index + offset;
+        return foundAt + offset;
     }
     /**
      * Process an expression that contains both numbers and references and figure out the result
@@ -157,25 +156,24 @@ public class ValTools {
             }
             switch (p[0]) {
                 case "d", "r", "double", "real" -> {
-                    var d = rtvals.getReal(p[1], Double.NaN);
-                    if (!Double.isNaN(d) || !error.isEmpty())
-                        line = line.replace("{" + p[0] + ":" + p[1] + "}", Double.isNaN(d) ? error : String.valueOf(d));
+                    var d = rtvals.getRealVal(OneTimeValUser.get(),p[1]);
+                    if (!d.isDummy())
+                        line = line.replace("{" + p[0] + ":" + p[1] + "}",d.asString());
                 }
                 case "i", "int", "integer" -> {
-                    var i = rtvals.getIntegerVal(p[1]).map(IntegerVal::asInteger).orElse(Integer.MAX_VALUE);
-                    if (i != Integer.MAX_VALUE)
+                    var i = rtvals.getIntegerVal(OneTimeValUser.get(),p[1]);
+                    if ( !i.isDummy() )
                         line = line.replace("{" + p[0] + ":" + p[1] + "}", String.valueOf(i));
                 }
                 case "t", "text" -> {
-                    String t = rtvals.getTextVal(p[1]).map(TextVal::value).orElse(error);
-                    if (!t.isEmpty())
-                        line = line.replace("{" + p[0] + ":" + p[1] + "}", t);
+                    var t = rtvals.getTextVal(OneTimeValUser.get(),p[1]);
+                    if (!t.isDummy())
+                        line = line.replace("{" + p[0] + ":" + p[1] + "}", t.asString());
                 }
                 case "f", "b", "flag" -> {
-                    var d = rtvals.getFlagVal(p[1]);
-                    var r = d.map(FlagVal::toString).orElse(error);
-                    if (!r.isEmpty())
-                        line = line.replace("{" + p[0] + ":" + p[1] + "}", r);
+                    var d = rtvals.getFlagVal(OneTimeValUser.get(),p[1]);
+                    if (!d.isDummy())
+                        line = line.replace("{" + p[0] + ":" + p[1] + "}", d.asString());
                 }
                 case "rand","random" -> {
                     var max = NumberUtils.createInteger(p[1]);
@@ -201,9 +199,9 @@ public class ValTools {
             case "utcshort"-> line.replace("{utcshort}", TimeTools.formatShortUTCNow());
             default ->
             {
-                var val = rtvals.getBaseVal(ref);
-                if( val.isPresent())
-                    yield line.replace("{" + ref + "}", val.get().id());
+                var val = rtvals.getBaseVal( OneTimeValUser.get(), ref );
+                if( !val.isDummy())
+                    yield line.replace("{" + ref + "}", val.asString());
                 yield line;
             }
         };
@@ -232,46 +230,41 @@ public class ValTools {
         return line;
     }
 
-    private static String findReplacement(Rtvals rv, String word, String line, String error) {
+    private static String findReplacement(Rtvals rtvals, String word, String line, String error) {
         var id = word.split(":")[1];
+        error =  error.equalsIgnoreCase("ignore")?id:error;
         return switch (word.charAt(0)) {
             case 'd', 'r' -> {
-                if (!rv.hasReal(id)) {
+                var rv = rtvals.getRealVal(OneTimeValUser.get(),id);
+                if (rv.isDummy()) {
                     Logger.error("No such real " + id + ", extracted from " + line); // notify
-                    if (!error.equalsIgnoreCase("ignore")) // if errors should be ignored
-                        yield error;
+                    yield error;
                 }
-                yield String.valueOf(rv.getReal(id, Double.NaN));
+                yield rv.asString();
             }
             case 'i' -> {
-                if (!rv.hasInteger(id)) { // ID found
+                var i = rtvals.getIntegerVal(OneTimeValUser.get(),id);
+                if (i.isDummy()) { // ID not found
                     Logger.error("No such integer " + id + ", extracted from " + line); // notify
-                    if (!error.equalsIgnoreCase("ignore")) // if errors should be ignored
-                        yield error;
+                    yield error;
                 }
-                yield String.valueOf(rv.getIntegerVal(id).map(IntegerVal::asInteger).orElse(Integer.MAX_VALUE));
+                yield i.asString();
             }
             case 'f' -> {
-                if (!rv.hasFlag(id)) {
+                var fv = rtvals.getIntegerVal(OneTimeValUser.get(),id);
+                if (fv.isDummy()) {
                     Logger.error("No such flag " + id + ", extracted from " + line);
-                    if (!error.equalsIgnoreCase("ignore"))
-                        yield error;
+                    yield error;
                 }
-                yield rv.getFlagState(id) ? "1" : "0";
+                yield fv.asString();
             }
             case 't', 'T' -> {
-                if (!rv.hasText(id)) {
-                    if (word.charAt(0) == 'T') {
-                        rv.setText(id, "");
-                    } else {
-                        Logger.error("No such text " + id + ", extracted from " + line);
-                        if (!error.equalsIgnoreCase("ignore"))
-                            yield error;
-                    }
-                    yield "";
-                } else {
-                    yield rv.getTextVal(id).map(TextVal::value).orElse("");
+                var tv = rtvals.getTextVal(OneTimeValUser.get(),id);
+                if (tv.isDummy()) {
+                    Logger.error("No such text " + id + ", extracted from " + line);
+                    yield error;
                 }
+                yield tv.asString();
             }
             default -> {
                 Logger.error("No such type: " + word.charAt(0));
@@ -280,21 +273,12 @@ public class ValTools {
         };
     }
 
-    private static String checkRealtimeValues(Rtvals rv, String word, String line, String error) {
-        if (rv.hasReal(word))  //first check for real
-            return String.valueOf(rv.getReal(word, Double.NaN));
-
-        // if not
-        if (rv.hasInteger(word)) {
-            return String.valueOf(rv.getIntegerVal(word).map(IntegerVal::asInteger).orElse(Integer.MAX_VALUE));
+    private static String checkRealtimeValues(Rtvals rtvals, String word, String line, String error) {
+        var val = rtvals.getBaseVal(OneTimeValUser.get(),word);
+        if( val.isDummy() ){
+            Logger.error("Couldn't process " + word + " found in " + line); // log it and abort
+            return error;
         }
-        if (rv.hasText(word)) { //next, try text
-            return rv.getTextVal(word).map(TextVal::value).orElse("");
-        }
-        if (rv.hasFlag(word)) { // if it isn't a text, check if it's a flag
-            return rv.getFlagState(word) ? "1" : "0";
-        }
-        Logger.error("Couldn't process " + word + " found in " + line); // log it and abort
-        return error;
+        return val.asString();
     }
 }

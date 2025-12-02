@@ -36,8 +36,6 @@ public class PathPool implements Commandable {
     public void readPathsFromXML(){
 
         Logger.info("Loading paths...");
-        // Reset the rtval stores
-        clearStores();
 
         // From the paths section
         XMLdigger.goIn(Paths.settings(), "meles", "paths").digOut("path").forEach(
@@ -121,7 +119,7 @@ public class PathPool implements Commandable {
             case "clear" -> { // Clear the path node and reload
                 XMLfab.withRoot(Paths.settings(), "meles", "paths").clearChildren().build();
                 paths.values().forEach(PathForward::stop);
-                paths.values().forEach(PathForward::clearStores);
+                //paths.values().forEach(PathForward::clearStores);
                 paths.clear();
                 return "Paths cleared";
             }
@@ -220,8 +218,4 @@ public class PathPool implements Commandable {
         }
         return res;
     }
-    private void clearStores(){
-        paths.values().forEach(PathForward::clearStores);
-    }
-
 }

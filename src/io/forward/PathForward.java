@@ -151,27 +151,24 @@ public class PathForward implements Writable {
     }
     public void reloadSrc() {
 
-        if (active)
+        if (active) {
             return;
-        if (customs.isEmpty()) { // If no custom sources
-            if (stepsForward == null) {
-                Logger.error(id + "(pf) -> No steps to take, this often means something went wrong processing it");
-                return;
-            }
-            Core.addToQueue(Datagram.system("stop").writable(this));
-            Core.addToQueue( Datagram.system(src).writable(this) ); // Request it
-            active = true;
-        } else { // and there are steps
-            customs.forEach(CustomSrc::start);
-            active=true;
         }
-    }
 
-    public void clearStores() {
-       /* Arrays.stream(stepsForward)
-                .map(AbstractStep::getStore)
-                .filter(Objects::nonNull)
-                .forEach(store -> store.removeRealtimeValues(rtvals));*/
+        if (!customs.isEmpty()) { // If no custom sources
+            customs.forEach(CustomSrc::start);
+            active = true;
+            return;
+        }
+
+        if (stepsForward == null) {
+            Logger.error(id + "(pf) -> No steps to take, this often means something went wrong processing it");
+            return;
+        }
+
+        Logger.error("Asking to add source: "+src);
+        Core.addToQueue( Datagram.system(src).writable(this) ); // Request it
+        active = true;
     }
 
     public boolean isValid(){

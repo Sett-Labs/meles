@@ -5,10 +5,7 @@ import io.hardware.gpio.OutputPin;
 import io.netty.channel.EventLoopGroup;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.tinylog.Logger;
-import util.data.vals.IntegerVal;
-import util.data.vals.NumericVal;
-import util.data.vals.RealVal;
-import util.data.vals.Rtvals;
+import util.data.vals.*;
 import util.evalcore.MathFab;
 import util.evalcore.ParseTools;
 import util.tasks.blocks.*;
@@ -20,7 +17,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Optional;
 
 public class TaskParser {
 
@@ -125,10 +121,11 @@ public class TaskParser {
         var source = cell.getParam("source", "");
         var op = cell.getParam("action", "");
 
+        boolean needMoreVals=false;
         for (var target : targets) {
             if (!tools.rtvals().hasBaseVal(target)) {
                 Logger.error(blockId + " -> No such target yet: " + target);
-                return null;
+                needMoreVals=true;
             }
         }
         if (op.isEmpty()) {
@@ -136,7 +133,8 @@ public class TaskParser {
             return null;
         }
 
-        var targetVals = Arrays.stream(targets).map(target -> getRealOrIntVal(tools.rtvals(), target)).toArray(NumericVal[]::new);
+        var targetVals = Arrays.stream(targets).map(target -> tools.rtvals.getNumericalVal(OneTimeValUser.get(),target))
+                        .filter(v -> !(v instanceof TextVal)).toArray(NumericVal[]::new);
 
         NumericVal sourceVal = null;
         if (!op.equals("reset")) {
@@ -149,15 +147,16 @@ public class TaskParser {
                     sourceVal.update(NumberUtils.toInt(source));
                 }
             } else if (tools.rtvals().hasBaseVal(source)) {
-                sourceVal = getRealOrIntVal(tools.rtvals(), source);
+                sourceVal = tools.rtvals.getNumericalVal(OneTimeValUser.get(), source);
             }
-        }
-        if (sourceVal == null) {
-            Logger.error(blockId + " -> No valid source provided.");
-            return null;
         }
 
         var bmb = BasicMathBlock.build(blockId, targetVals, op, sourceVal);
+        if (sourceVal == null || needMoreVals ) { // No valid one yet, register to get it later
+            tools.rtvals().registerCreationUser(bmb);
+        }else{
+            tools.rtvals().registerUpdateUser(bmb);
+        }
         if (bmb == null) {
             Logger.error(blockId + " -> Failed to build block.");
             return null;
@@ -219,13 +218,15 @@ public class TaskParser {
         if( id.contains("_post@")||id.contains("_pre@") ){
             expr = RtvalsParser.normalizeExpression(expr,"justrandom");
         }
-        var cb = ConditionBlock.build(expr, tools.rtvals, null);
+        var rtvals = tools.rtvals();
+
+        var cb = ConditionBlock.build(expr, rtvals, null);
         cb.ifPresent(block -> {
             block.id(blockId);
             var target = cell.getArrowTarget("update");
             if (target != null && target.type.equals("flagval")) {
                 var flagId = target.getParam("group", "") + "_" + target.getParam("name", "");
-                tools.rtvals().getFlagVal(flagId).ifPresent(block::setFlag);
+                block.setFlag( rtvals.getFlagVal(block,flagId) );
 
                 // Grab the next of the flagval and make it the next of the condition
                 if (target.hasArrow("next")) {
@@ -379,32 +380,10 @@ public class TaskParser {
         if (flagId.isEmpty())
             flagId = cell.getParam("flag", "");
 
-        if( flagId.equals("??_??") || flagId.isEmpty() ){ // Find the flag being pointed to?
-            var tar = cell.getArrowTarget("next");
-            if( tar==null || (!tar.type.equals("flagval")&& !tar.type.equals("outputpin"))) {
-                Logger.error(blockId + " -> Flagblock without flagval id specified or flag targeted.");
-                return null;
-            }
-            flagId = tar.getParam("group","")+"_"+tar.getParam("name","");
-            Logger.info("Found flag being pointed at "+flagId);
-            boolean exists = tools.rtvals().getFlagVal(flagId).isPresent();
-            Logger.info("Found "+flagId+"? "+exists+ " type:"+tar.type);
-            if( !exists && tar.type.equals("outputpin") ){
-                doOutputPin(tar,tools,"");
-            }else{
-                Logger.info("Outputpin already exists, reusing");
-            }
-            cell.removeArrow("next"); // Make sure the arrow isn't used twice
-        }
-        var flagOpt = tools.rtvals().getFlagVal(flagId);
-        if (flagOpt.isEmpty()) {
-            Logger.error(blockId + " -> No such flagVal yet: " + flagId);
-            return null;
-        }
         FlagBlock fb = switch (action) {
-            case "raise", "set", "on" -> FlagBlock.raises(flagOpt.get());
-            case "lower", "clear", "fall", "off" -> FlagBlock.lowers(flagOpt.get());
-            case "toggle" -> FlagBlock.toggles(flagOpt.get());
+            case "raise", "set", "on" -> FlagBlock.raises();
+            case "lower", "clear", "fall", "off" -> FlagBlock.lowers();
+            case "toggle" -> FlagBlock.toggles();
             default -> {
                 Logger.error(blockId + " -> Unknown action picked for " + flagId + ": " + action);
                 yield null;
@@ -413,6 +392,26 @@ public class TaskParser {
         if (fb == null)
             return null;
 
+        if( flagId.equals("??_??") || flagId.isEmpty() ){ // Find the flag being pointed to?
+            var tar = cell.getArrowTarget("next");
+            if( tar==null || (!tar.type.equals("flagval")&& !tar.type.equals("outputpin"))) {
+                Logger.error(blockId + " -> Flagblock without flagval id specified or flag targeted.");
+                return null;
+            }
+            flagId = tar.getParam("group","")+"_"+tar.getParam("name","");
+            Logger.info("Found flag being pointed at "+flagId);
+
+            boolean exists = tools.rtvals().hasFlag(flagId);
+
+            Logger.info("Found "+flagId+"? "+exists+ " type:"+tar.type);
+            if( !exists && tar.type.equals("outputpin") ){
+                doOutputPin(tar,tools,"");
+            }else{
+                Logger.info("Outputpin already exists, reusing");
+            }
+            cell.removeArrow("next"); // Make sure the arrow isn't used twice
+        }
+        fb.setFlag( tools.rtvals().getFlagVal(fb, flagId) );
         fb.id(blockId);
         if (!addNext(cell, fb, tools, "next", "pass", "yes", "ok")) {
             if (cell.hasArrows() && !cell.getArrowLabels().equals("?"))
@@ -425,17 +424,16 @@ public class TaskParser {
 
         var flagId = cell.getParam("group", "") +"_"+ cell.getParam("name", "");
         Logger.info(blockId + " -> Processing Output pin with id "+flagId );
-        var flagOpt = tools.rtvals().getFlagVal(flagId);
-        if( flagOpt.isEmpty() ) {
-            Logger.error(flagId+" -> No such outputpin yet");
-            return null;
-        }
-        if( !(flagOpt.get() instanceof OutputPin op) ){
+
+        var fb = FlagBlock.toggles();
+
+        var flag = tools.rtvals().getFlagVal(fb,flagId);
+        if( !flag.isDummy() && !(flag instanceof OutputPin op) ){
             Logger.error(flagId+" -> Not an outputpin");
             return null;
         }
+        fb.setFlag(flag);
 
-        var fb = FlagBlock.toggles(op);
         fb.id(blockId);
         Logger.info( "Arrows: "+cell.getArrowLabels());
         addNext(cell, fb, tools, "next", "pass", "yes", "ok");
@@ -483,11 +481,12 @@ public class TaskParser {
             Logger.error(blockId + " -> Logblock without a message specified");
             return null;
         }
+
         var message = cell.getParam("message", "");
         var list = ParseTools.extractCurlyContent(message,true);
         var refs = list.stream().filter( l -> l.contains("_"))
-                        .map(it-> tools.rtvals().getNumericalVal(it))
-                        .flatMap(Optional::stream).toArray(NumericVal[]::new);
+                        .map(it-> tools.rtvals().getBaseVal(OneTimeValUser.get(),it))
+                        .toArray(BaseVal[]::new);
 
         var lb = switch (cell.type) {
             case "errorblock" -> LogBlock.error(message,refs);
@@ -495,6 +494,7 @@ public class TaskParser {
             case "infoblock" -> LogBlock.info(message,refs);
             default -> null;
         };
+        tools.rtvals.registerUpdateUser(lb);
         if (lb != null) {
             lb.id(blockId);
             // Arrows
@@ -552,12 +552,9 @@ public class TaskParser {
             }
             mb = new MqttBlock(brokerId,topic, val );
         }else{
-            var valOpt = tools.rtvals.getBaseVal(rtval);
-            if( valOpt.isEmpty() ){
-                Logger.error(blockId+" -> No val associated with "+rtval);
-                return null;
-            }
-            mb = new MqttBlock(brokerId,topic, valOpt.get());
+            var val = tools.rtvals.getBaseVal(OneTimeValUser.get(),rtval);
+            mb = new MqttBlock(brokerId,topic, val);
+            tools.rtvals().applyUser(mb,!val.isDummy());
         }
         if( cell.hasParam("expiretime") ){
             var exp = cell.getParam("expiretime","0s");
@@ -702,12 +699,6 @@ public class TaskParser {
         return split[0] + splitter + prefix + (NumberUtils.toInt(split[1]) + 1) + suffix;
     }
 
-    private static NumericVal getRealOrIntVal(Rtvals rtvals, String target) {
-        var real = rtvals.getRealVal(target);
-        if (real.isPresent())
-            return real.get();
-        return rtvals.getIntegerVal(target).orElse(null);
-    }
     private static boolean addNext(Drawio.DrawioCell cell, AbstractBlock block, TaskTools tools, String... nexts) {
 
         tools.blocks.put(cell.drawId, block);

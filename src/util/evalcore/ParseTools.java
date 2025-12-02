@@ -4,6 +4,7 @@ import org.apache.commons.lang3.math.NumberUtils;
 import org.tinylog.Logger;
 import util.data.procs.DoubleArrayToDouble;
 import util.data.vals.NumericVal;
+import util.data.vals.OneTimeValUser;
 import util.data.vals.Rtvals;
 import util.math.MathUtils;
 
@@ -217,17 +218,14 @@ public class ParseTools {
         }
 
         for (var val : bracketVals) {
-            var result = rtvals.getBaseVal(val);
-            if (result.isEmpty()) {
-                Logger.error("No such rtval yet: " + val);
-                return "";
-            } else if (result.get() instanceof NumericVal nv) {
+            var result = rtvals.getBaseVal( OneTimeValUser.get(), val );
+            if (result instanceof NumericVal nv) {
                 int size = refLookup.size();
                 expression = expression.replace("{" + val + "}", "r" + size);
                 refLookup.add(100 + refs.size());
                 refs.add(nv);
             } else {
-                Logger.error("Can't work with " + result.get() + " NOT a numeric val.");
+                Logger.error("Can't work with " + result + " NOT a numeric val.");
                 return "";
             }
         }

@@ -6,6 +6,7 @@ import io.hardware.gpio.OutputPin;
 import io.netty.channel.EventLoopGroup;
 import org.tinylog.Logger;
 import util.data.vals.FlagVal;
+import util.data.vals.OneTimeValUser;
 import util.data.vals.Rtvals;
 import util.data.vals.ValFab;
 import util.tools.TimeTools;
@@ -145,10 +146,9 @@ public class GpioParser {
                         trigger = "falling";
                 }
                 var flagId = cell.getParam("group", "")+"_"+ cell.getParam("name", "");
-                var flagOpt = tls.rtvals().getFlagVal(flagId);
-                if( flagOpt.isPresent() ){
-                    var fl = flagOpt.get();
-                    if( fl instanceof InputPin ip) {
+                var flag = tls.rtvals().getFlagVal(OneTimeValUser.get(),flagId);
+                if( !flag.isDummy() ){
+                    if( flag instanceof InputPin ip) {
                         Logger.info("That flag already exist as inputpin, closing it.");
                         ip.close();
                     }

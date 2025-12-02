@@ -32,4 +32,6 @@ public interface NumericVal {
     default String getExtraInfo() {
         return "";
     }
+
+    boolean isDummy();
 }

@@ -1,6 +1,8 @@
 package util.data.vals;
 
+import io.Writable;
 import org.apache.commons.lang3.ArrayUtils;
+import util.data.procs.ValPrinter;
 
 import java.util.Arrays;
 
@@ -55,6 +57,20 @@ public class RealValSymbiote extends RealVal {
 
     public RealVal[] getDerived() {
         return Arrays.copyOfRange(underlings, 1, underlings.length);
+    }
+
+    public void removePrinterUnderling(Writable wr){
+        int index=-1;
+        for( int a=1;a<underlings.length;a++ ){
+            if( underlings[a] instanceof ValPrinter vp ){
+                if( vp.matchWritable(wr)) {
+                    index = a;
+                    break;
+                }
+            }
+        }
+        if( index>=1 )
+            underlings = ArrayUtils.remove(underlings,index);
     }
 
     public String getExtraInfo() {

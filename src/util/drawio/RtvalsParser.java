@@ -19,18 +19,6 @@ public class RtvalsParser {
     public record ValCell(NumericVal val, Drawio.DrawioCell cell) {
     }
 
-    public static void parseDrawIoRtvals(Path file, EventLoopGroup eventLoop, Rtvals rtvals) {
-        if (!file.getFileName().toString().endsWith(".drawio")) {
-            Logger.error("This is not a drawio file: " + file);
-            return;
-        }
-        //var tools = new ValParserTools(eventLoop, rtvals, new HashMap<>(), new ArrayList<>(), file);
-        var tls = new TaskParser.TaskTools(eventLoop, new ArrayList<>(), rtvals, new HashMap<>(), new HashMap<>(), new HashMap<>());
-        ArrayList<RtvalsParser.ValCell> vals = new ArrayList<>();
-        var cells = Drawio.parseFile(file);
-        parseRtvals(cells, tls, vals, file);
-    }
-
     public static void parseDrawIoRtvals(HashMap<String, Drawio.DrawioCell> cells, EventLoopGroup eventLoop, Rtvals rtvals, Path file) {
         var tools = new TaskParser.TaskTools(eventLoop, new ArrayList<>(), rtvals, new HashMap<>(), new HashMap<>(), new HashMap<>());
         ArrayList<RtvalsParser.ValCell> vals = new ArrayList<>();
@@ -46,7 +34,6 @@ public class RtvalsParser {
 
             var opt = Drawio.findTargetingCell(cells,cell,"derive");
             if( opt.isPresent() ){
-                Logger.info("Origin is a "+opt.get().type );
                 if( opt.get().type.equals("integerval")){
                     var validIntRed = Reducer.isValidIntegerReducer(cell.getParam("reducer",""));
                     if( validIntRed && cell.type.equals("realval") ){
@@ -57,14 +44,12 @@ public class RtvalsParser {
                 if( group.isEmpty() || group.equals("??") ) // If no group was provided, give it the same as origin
                     cell.setParam("group",opt.get().getParam("group",group));
             }
-            Logger.info( "Parsing "+cell.type +" " +cell.getParam("name",""));
             switch (cell.type) {
                 case "realval" -> addToValsIfNew(doRealVal(cell, tools), cell, vals);
                 case "integerval" -> addToValsIfNew(doIntegerVal(cell, tools), cell, vals);
                 case "flagval" -> addToValsIfNew(doFlagVal(cell, tools), cell, vals);
 
                 case "valupdater" -> starts.add(cell);
-                //default -> Logger.error( "Unknown melestype used: "+cell.type );
             }
         }
 
@@ -91,7 +76,7 @@ public class RtvalsParser {
             return null;
         String group = idArray[0], name = idArray[1];
         if (tools.rtvals().hasReal(group + "_" + name))
-            return tools.rtvals().getRealVal(group + "_" + name).get(); //get is fine because of earlier has
+            return tools.rtvals().getRealVal(OneTimeValUser.get(),group + "_" + name); //get is fine because of earlier has
         int window = cell.getParam("window", 0);
         var unit = cell.getParam("unit", "");
 
@@ -120,8 +105,9 @@ public class RtvalsParser {
             return null;
         String group = idArray[0], name = idArray[1];
 
-        if (tools.rtvals().hasInteger(group + "_" + name))
-            return tools.rtvals().getIntegerVal(group + "_" + name).get(); //get is fine because of earlier has
+        if (tools.rtvals().hasInteger(group + "_" + name) )
+            return tools.rtvals().getIntegerVal(OneTimeValUser.get(),group + "_" + name); //get is fine because of earlier has
+
         int window = cell.getParam("window", 0);
         var unit = cell.getParam("unit", "");
 
@@ -144,17 +130,7 @@ public class RtvalsParser {
         var idArray = getId(cell);
         if (idArray.length == 0)
             return null;
-        String group = idArray[0], name = idArray[1];
-
-        FlagVal fv;
-        var id=group+"_"+name;
-        if (tools.rtvals().hasFlag(id) ){
-            Logger.info("Altering existing flagval: "+id);
-            fv = tools.rtvals().getFlagVal(id).get(); //get is fine because of earlier has
-        }else {
-            Logger.info("Adding a new flagval: "+id);
-            fv = FlagVal.newVal(group, name);
-        }
+        var fv = tools.rtvals().addFlagVal(OneTimeValUser.get(), FlagVal.newVal(idArray[0], idArray[1]),false);
         return alterFlagVal(fv, cell, tools);
     }
 
@@ -185,7 +161,7 @@ public class RtvalsParser {
             lowBlock = TaskParser.createBlock(low, tools, fv.id() + "_low");
 
         fv.setBlocks(highBlock, lowBlock, raiseBlock, fallBlock);
-        tools.rtvals().addFlagVal( fv,false );
+        tools.rtvals().addFlagVal( OneTimeValUser.get(), fv,false );
         return fv;
     }
     private static String[] getId(Drawio.DrawioCell cell) {
@@ -218,9 +194,9 @@ public class RtvalsParser {
                 continue;
             }
             if (res.val() instanceof RealVal rv) {
-                tools.rtvals().addRealVal(rv);
+                tools.rtvals().addRealVal(OneTimeValUser.get(),rv);
             } else if (res.val() instanceof IntegerVal iv) {
-                tools.rtvals().addIntegerVal(iv);
+                tools.rtvals().addIntegerVal(OneTimeValUser.get(),iv);
             }
         }
     }
@@ -322,12 +298,13 @@ public class RtvalsParser {
             }
 
         }
+        var rtvals = tools.rtvals();
         // At this post the precondition should be taken care off... now it's the difficult stuff like symbiote etc
         if (valcell.cell().hasArrow("derive")) {
             // val becomes a symbiote...
             if (valcell.val() instanceof RealVal) {
                 RealValSymbiote symb = new RealValSymbiote(0, (RealVal) valcell.val()); // First create the symbiote
-                tools.rtvals().addRealVal(symb); // And add it to the collection
+                rtvals.addRealVal(OneTimeValUser.get(),symb); // And add it to the collection
                 try {
                     processDerives(valcell, label, tools, vals).forEach(val -> symb.addUnderling((RealVal) val)); // Then process because it might be referred to
                 } catch (ClassCastException e) {
@@ -336,15 +313,15 @@ public class RtvalsParser {
                 valcell = new ValCell(symb, valcell.cell()); // Overwrite the cell?
             } else if (valcell.val() instanceof IntegerVal iv) {
                 IntegerValSymbiote symb = new IntegerValSymbiote(0, iv, new NumericVal[1]);
-                tools.rtvals().addIntegerVal(symb);
+                rtvals.addIntegerVal(OneTimeValUser.get(),symb);
                 processDerives(valcell, label, tools, vals).forEach(symb::addUnderling);
                 valcell = new ValCell(symb, valcell.cell());
             }
         } else { // Just find the next block
             if (valcell.val() instanceof RealVal rv) {
-                tools.rtvals().addRealVal(rv);
+                rtvals.addRealVal(OneTimeValUser.get(),rv);
             } else if (valcell.val() instanceof IntegerVal iv) {
-                tools.rtvals().addIntegerVal(iv);
+                rtvals.addIntegerVal(OneTimeValUser.get(),iv);
             }
         }
         return valcell;
@@ -365,13 +342,7 @@ public class RtvalsParser {
             if (math != null) {
                 valcell.val().setMath(math);
             } else if (!builtin.isEmpty()) {
-                if( target.getParam("window",-1)!=0 ){ // Aggregator
-                    if( Builtin.isValidDoubleProc(builtin) ){
-
-                    }else if( Builtin.isValidIntProc(builtin) ){
-
-                    }
-                }else{
+                if( target.getParam("window",-1)==0 ){ // Aggregator
                     if (target.type.startsWith("real")) {
                         if (Builtin.isValidDoubleProc(builtin)) {
                             valcell.val().setMath(Builtin.getDoubleFunction(builtin, scale));

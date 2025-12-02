@@ -2,14 +2,16 @@ package io.forward.steps;
 
 import meles.Core;
 import org.tinylog.Logger;
+import util.data.vals.AnyDummy;
 import util.data.vals.BaseVal;
+import util.data.vals.ValUser;
 import util.evalcore.ParseTools;
 import worker.Datagram;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 
-public class CmdStep extends AbstractStep {
+public class CmdStep extends AbstractStep implements ValUser {
     private final ArrayList<BaseVal> vals = new ArrayList<>();
     private final ArrayList<Cmd> cmds = new ArrayList<>();
     private int highestI = -1;
@@ -62,5 +64,19 @@ public class CmdStep extends AbstractStep {
             this.cmd = cmd;
             this.ori = ori;
         }
+    }
+    public boolean isWriter(){
+        return false;
+    }
+    public boolean provideVal( BaseVal val){
+        var opt = vals.stream().filter( v->v.id().equals(val.id())).findFirst();
+        if( opt.isPresent() ){ // Meaning no id match
+            var old = opt.get();
+            if( old.getClass().isInstance( val ) || old instanceof AnyDummy) {
+                vals.set(vals.indexOf(old), val);
+                Logger.info("Replaced "+old.id());
+            }
+        }
+        return vals.stream().noneMatch(BaseVal::isDummy);
     }
 }

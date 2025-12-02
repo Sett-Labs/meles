@@ -105,4 +105,7 @@ public abstract class AbstractStep {
             }
         }
     }
+    public String id(){
+        return id;
+    }
 }

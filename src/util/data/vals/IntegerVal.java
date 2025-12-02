@@ -28,6 +28,11 @@ public class IntegerVal extends BaseVal implements NumericVal {
         return new IntegerVal(group, name, "");
     }
 
+    public static IntegerVal createDummy( String group, String name ){
+        var val = IntegerVal.newVal(group,name);
+        val.markAsDummy();
+        return val;
+    }
     public int value() {
         return value;
     }

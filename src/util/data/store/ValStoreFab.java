@@ -172,7 +172,7 @@ public class ValStoreFab {
                 case "real" -> {
                     var rv = ValFab.buildRealVal(val, groupID, rtvals);
                     if(rv.isPresent()){
-                        localRtvals.set(pos, rtvals.addRealVal(rv.get() ) );
+                        localRtvals.set(pos, rtvals.addRealVal(store,rv.get() ) );
                     }else{
                         Logger.error("store -> Failed to read real from xml");
                     }
@@ -180,7 +180,7 @@ public class ValStoreFab {
                 case "int", "integer" -> {
                     var iv = ValFab.buildIntegerVal(val, groupID, rtvals);
                     if(iv.isPresent()){
-                        localRtvals.set(pos, rtvals.addIntegerVal(iv.get() ) );
+                        localRtvals.set(pos, rtvals.addIntegerVal(store,iv.get() ) );
                     }else{
                         Logger.error("store -> Failed to read int from xml");
                     }
@@ -188,7 +188,7 @@ public class ValStoreFab {
                 case "flag", "bool" -> {
                     var flag = ValFab.buildFlagVal(val, groupID, rtvals);
                     if( flag.isPresent() ){
-                       localRtvals.set( pos, rtvals.addFlagVal(flag.get(),false) );
+                       localRtvals.set( pos, rtvals.addFlagVal(store,flag.get(),false) );
                     }else{
                         Logger.error("store -> Failed to read flag from xml");
                     }
@@ -197,7 +197,7 @@ public class ValStoreFab {
                 case "text" -> {
                     var tv = ValFab.buildTextVal(val, groupID);
                     if(tv.isPresent()){
-                        localRtvals.set(pos, rtvals.addTextVal(tv.get()));
+                        localRtvals.set(pos, rtvals.addTextVal(store,tv.get()));
                     }else{
                         Logger.error("store -> Failed to read text from xml");
                     }

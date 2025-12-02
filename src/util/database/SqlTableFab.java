@@ -120,7 +120,7 @@ public class SqlTableFab {
     }
 
     private static ValStore buildStore(Rtvals rtvals, String tableName, ArrayList<SqlColumn> columns, PrepStatement prep) {
-        //SqlTableFab.PrepStatement prep = preps.get("");
+
         if (prep == null) {
             Logger.error(tableName + " -> No such prep: " + tableName);
             return null;
@@ -146,13 +146,8 @@ public class SqlTableFab {
                     case UTCDTNOW -> doUtcdtNow( store, col.title,tableName);
                     case LOCALDTNOW -> doLocaldtNow( store, col.title, tableName);
                     case TEXT, DATETIME -> {
-                        var v = rtvals.getTextVal(ref);
-                        if (v.isPresent()) {
-                            store.addAbstractVal(v.get());
-                        } else {
-                            Logger.error(tableName + " -> Couldn't find " + ref);
-                            store.addEmptyVal();
-                        }
+                        var v = rtvals.getTextVal(store,ref);
+                        store.addAbstractVal(v);
                     }
 
                 }
@@ -160,47 +155,33 @@ public class SqlTableFab {
                 Logger.error(tableName + " -> Null pointer when looking for " + ref + " type:" + col.type);
             }
         }
+        store.id("table:"+tableName);
         return store;
     }
 
     private static boolean doReal(Rtvals rtvals, String ref, ValStore store, SqlColumn col, String tableName) {
-        var v = rtvals.getRealVal(ref);
-        if (v.isPresent()) {
-            store.addAbstractVal(v.get());
-            return true;
-        }
-        if (col.hasDefault) {
+        var val = rtvals.getRealVal(store,ref);
+        if (col.hasDefault && val.isDummy() ) {
             Logger.warn(tableName + " -> Couldn't find " + ref + " using column default");
-            var rv = RealVal.newVal(tableName, col.title);
-            if (rv.parseValue(col.defString)) {
-                store.addAbstractVal(rv);
-                return true;
+            if ( !val.parseValue(col.defString)) {
+                Logger.error(tableName + " -> Failed to parse the default of " + col.title + " to a real.");
+                return false;
             }
-            Logger.error(tableName + " -> Failed to parse the default of " + col.title + " to a real.");
-            return false;
         }
-        Logger.error(tableName + " -> Couldn't find " + ref + " AND no column default, abort store building");
+        store.addAbstractVal(val);
         return true;
     }
 
     private static boolean doInteger(Rtvals rtvals, String ref, ValStore store, SqlColumn col, String tableName) {
-        var v = rtvals.getIntegerVal(ref);
-        if (v.isPresent()) {
-            store.addAbstractVal(v.get());
-            return true;
-        }
-
-        if (col.hasDefault) {
+        var val = rtvals.getIntegerVal(store,ref);
+        if (col.hasDefault && val.isDummy() ) {
             Logger.warn(tableName + " -> Couldn't find the IntVal " + ref + " using column default");
-            var iv = IntegerVal.newVal(tableName, col.title);
-            if (iv.parseValue(col.defString)) {
-                store.addAbstractVal(iv);
-                return true;
+            if (!val.parseValue(col.defString)) {
+                Logger.error(tableName + " -> Failed to parse the default of " + col.title + " to an integer.");
+                return false;
             }
-            Logger.error(tableName + " -> Failed to parse the default of " + col.title + " to an integer.");
-            return false;
         }
-        Logger.error(tableName + " -> Couldn't find the IntVal " + ref + " using AND no column default, abort store building");
+        store.addAbstractVal(val);
         return true;
     }
 

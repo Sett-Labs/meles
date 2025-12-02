@@ -11,6 +11,7 @@ import io.telnet.TelnetCodes;
 import org.tinylog.Logger;
 import util.LookAndFeel;
 import util.data.ValTools;
+import util.data.procs.ValPrinter;
 import util.tools.TimeTools;
 import util.xml.XMLdigger;
 import worker.Datagram;
@@ -20,13 +21,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class Rtvals implements Commandable {
+public class Rtvals implements Commandable,ValUser {
     /* Data stores */
     private final ConcurrentHashMap<String, RealVal> realVals = new ConcurrentHashMap<>();         // doubles
     private final ConcurrentHashMap<String, IntegerVal> integerVals = new ConcurrentHashMap<>(); // integers
     private final ConcurrentHashMap<String, TextVal> textVals = new ConcurrentHashMap<>();         // strings
     private final ConcurrentHashMap<String, FlagVal> flagVals = new ConcurrentHashMap<>();         // booleans
     private final HashMap<String, DynamicUnit> units = new HashMap<>();
+
+    private final HashSet<ValUser> needUpdates = new HashSet<>();
+    private final HashSet<ValUser> needCreations = new HashSet<>();
 
     EventLoopGroup eventLoop;
 
@@ -72,22 +76,15 @@ public class Rtvals implements Commandable {
      * @param val The val to add if new
      * @return The final val at the key
      */
-    public BaseVal AddIfNewAndRetrieve(BaseVal val) {
-        if (val instanceof RealVal rv) {
-            realVals.putIfAbsent(val.id(), rv);
-            return realVals.get(val.id());
-        }
-        if (val instanceof IntegerVal iv) {
-            integerVals.putIfAbsent(val.id(), iv);
-            return integerVals.get(val.id());
-        }
-        if (val instanceof FlagVal fv) {
-            return addFlagVal(fv,false);
-        }
-        if (val instanceof TextVal tv) {
-            textVals.putIfAbsent(val.id(), tv);
-            return textVals.get(val.id());
-        }
+    public BaseVal AddIfNewAndRetrieve(ValUser user, BaseVal val) {
+        if (val instanceof RealVal rv)
+            return addRealVal(user,rv);
+        if (val instanceof IntegerVal iv)
+            return addIntegerVal(user,iv);
+        if (val instanceof FlagVal fv)
+            return addFlagVal(user,fv,false);
+        if (val instanceof TextVal tv)
+            return addTextVal(user,tv);
         return null;
     }
     /* ************************************ R E A L V A L ***************************************************** */
@@ -97,13 +94,39 @@ public class Rtvals implements Commandable {
      *
      * @param rv The RealVal to add
      */
-    public RealVal addRealVal(RealVal rv) {
+    public RealVal addRealVal(ValUser user, RealVal rv) {
         if (rv == null) {
             Logger.error("Invalid RealVal received, won't try adding it");
             return null;
         }
-        realVals.putIfAbsent(rv.id(), rv);
+        if( rv instanceof RealValSymbiote ){
+            var old = realVals.get(rv.id());
+            if( ! (old instanceof RealValSymbiote) && old !=null ){
+                realVals.remove(rv.id());
+                System.out.println("Received symbiote, removing the real that it encapsulates");
+            }
+        }
+        if( realVals.putIfAbsent(rv.id(), rv) == null ) {
+            broadCastCreation(rv); //because new was created or may
+            if( rv instanceof RealValSymbiote ) // Because it might be a symbiote
+                broadcastReplacement(rv); // Because existing was replaced
+        }else{
+            broadcastReplacement(rv); // Because existing was replaced
+        }
+        applyUser(user,true);
         return realVals.get(rv.id());
+    }
+    /**
+     * Retrieve a RealVal from the hashmap based on the id
+     *
+     * @param id The reference with which the object was stored
+     * @return The requested RealVal or dummy if not found
+     */
+    public RealVal getRealVal(ValUser user, String id) {
+        var opt = Optional.ofNullable(realVals.get(id));
+        applyUser(user,opt.isPresent());
+        var split = id.split("_",2);
+        return opt.orElseGet(() -> RealVal.createDummy(split[0], split[1]));
     }
 
     public boolean hasReal(String id) {
@@ -114,18 +137,7 @@ public class Rtvals implements Commandable {
         return realVals.containsKey(id);
     }
 
-    /**
-     * Retrieve a RealVal from the hashmap based on the id
-     *
-     * @param id The reference with which the object was stored
-     * @return The requested RealVal or null if not found
-     */
-    public Optional<RealVal> getRealVal(String id) {
-        if (hasReal(id))
-            return Optional.ofNullable(realVals.get(id));
-        Logger.warn("Tried to retrieve non existing RealVal " + id);
-        return Optional.empty();
-    }
+
 
     /**
      * Sets the value of a real (in the hashmap)
@@ -134,19 +146,14 @@ public class Rtvals implements Commandable {
      * @param value The value of the parameter
      */
     public void updateReal(String id, double value) {
-        getRealVal(id).ifPresent(r -> r.update(value));
+        var rv = getRealVal(OneTimeValUser.get(),id);
+        if( rv.isDummy()) {
+            Logger.error("Tried to update a dummy real: "+id );
+        }else{
+            rv.update(value);
+        }
     }
 
-    /**
-     * Get the value of a real
-     *
-     * @param id     The id to get the value of
-     * @param defVal The value to return of the id wasn't found
-     * @return The value found or the bad value
-     */
-    public double getReal(String id, double defVal) {
-        return getRealVal(id).map(RealVal::value).orElse(defVal);
-    }
     /* ************************************ I N T E G E R V A L ***************************************************** */
 
     /**
@@ -154,19 +161,27 @@ public class Rtvals implements Commandable {
      *
      * @param iv The IntegerVal to add
      */
-    public IntegerVal addIntegerVal(IntegerVal iv) {
+    public IntegerVal addIntegerVal(ValUser user, IntegerVal iv) {
         if (iv == null) {
             Logger.error("Invalid IntegerVal received, won't try adding it");
             return null;
         }
         if( iv instanceof IntegerValSymbiote ){
-            System.out.println("Received symbiote, remove the integer that it encapsulates");
             var old = integerVals.get(iv.id());
             if( ! (old instanceof IntegerValSymbiote) && old !=null ){
                 integerVals.remove(iv.id());
+                System.out.println("Received symbiote, removing the integer that it encapsulates");
             }
         }
-        integerVals.putIfAbsent(iv.id(), iv);
+        if( integerVals.putIfAbsent(iv.id(), iv) == null ) {
+            broadCastCreation(iv); //because new was created or may
+            if( iv instanceof IntegerValSymbiote ) // Because it might be a symbiote
+                broadcastReplacement(iv); // Because existing was replaced
+        }else{
+            broadcastReplacement(iv); // Because existing was replaced
+        }
+
+        applyUser(user,true);
         return integerVals.get(iv.id());
     }
 
@@ -180,64 +195,41 @@ public class Rtvals implements Commandable {
      * @param id The reference with which the object was stored
      * @return The requested IntegerVal or empty optional if not found
      */
-    public Optional<IntegerVal> getIntegerVal(String id) {
-        if (hasInteger(id))
-            return Optional.ofNullable(integerVals.get(id));
-        Logger.warn("Tried to retrieve non existing IntegerVal " + id);
-        return Optional.empty();
+    public IntegerVal getIntegerVal(ValUser user, String id) {
+        var opt = Optional.ofNullable(integerVals.get(id));
+        applyUser(user,opt.isPresent());
+        var split = id.split("_",2);
+        return opt.orElseGet(() -> IntegerVal.createDummy(split[0], split[1]));
     }
 
     /* *********************************** T E X T S  ************************************************************* */
-    public TextVal addTextVal(TextVal tv) {
+    public TextVal addTextVal(ValUser user, TextVal tv) {
         if (tv == null) {
             Logger.error("Invalid TextVal received, won't try adding it");
             return null;
         }
+        applyUser(user,true);
         textVals.putIfAbsent(tv.id(), tv);
         return textVals.get(tv.id());
     }
-
-    public boolean hasText(String id) {
-        return textVals.containsKey(id);
-    }
-
     /**
      * Retrieve a TextVal from the hashmap based on the id
      *
      * @param id The reference with which the object was stored
      * @return The requested TextVal or empty optional if not found
      */
-    public Optional<TextVal> getTextVal(String id) {
-        if (!hasText(id) && !id.startsWith("meles"))
-            Logger.warn("Tried to retrieve non existing TextVal " + id);
-        return Optional.ofNullable(textVals.get(id));
+    public TextVal getTextVal(ValUser user, String id) {
+        var opt = Optional.ofNullable(textVals.get(id));
+        applyUser(user,opt.isPresent());
+        var split = id.split("_",2);
+        return opt.orElseGet(() -> TextVal.createDummy(split[0], split[1]));
     }
 
-    /**
-     * Set the value of a TextVal and create it if it doesn't exist yet
-     *
-     * @param id    The name/id of the val
-     * @param value The new content
-     */
-    public void setText(String id, String value) {
-
-        if (id.isEmpty()) {
-            Logger.error("Empty id given");
-            return;
-        }
-        if (textVals.containsKey(id)) {
-            textVals.get(id).parseValue(value);
-        } else {
-            var split = id.split("_", 2);
-            textVals.put(id, new TextVal(split[0], split[1], "").value(value));
-        }
+     /* ************************************** F L A G S ************************************************************* */
+    public FlagVal addFlagVal(ValUser user, FlagVal fv) {
+        return addFlagVal(user,fv,false);
     }
-
-    /* ************************************** F L A G S ************************************************************* */
-    public FlagVal addFlagVal(FlagVal fv) {
-        return addFlagVal(fv,false);
-    }
-    public FlagVal addFlagVal(FlagVal fv, boolean overwrite) {
+    public FlagVal addFlagVal(ValUser user, FlagVal fv, boolean overwrite) {
         if (fv == null) {
             Logger.error("Invalid FlagVal received, won't try adding it");
             return null;
@@ -247,38 +239,125 @@ public class Rtvals implements Commandable {
             return flagVals.put(fv.id(), fv);
         }
         var old = flagVals.putIfAbsent(fv.id(), fv);
+        applyUser(user,true);
         return old==null?fv:old;
     }
     public boolean hasFlag(String flag) {
         return flagVals.containsKey(flag);
     }
 
-    public Optional<FlagVal> getFlagVal(String id) {
-        return Optional.ofNullable(flagVals.get(id));
-    }
-
-    public boolean getFlagState(String id) {
-        return getFlagVal(id).map(FlagVal::isUp).orElse(false);
+    public FlagVal getFlagVal(ValUser user,String id) {
+        var opt = Optional.ofNullable(flagVals.get(id));
+        applyUser(user,opt.isPresent());
+        var split = id.split("_",2);
+        return opt.orElseGet(() -> FlagVal.createDummy(split[0], split[1]));
     }
     /* ******************************************************************************************************/
-
+    public BaseVal addBaseVal( ValUser user, BaseVal val ){
+        if( val instanceof RealVal rv )
+            return addRealVal(user,rv);
+        if( val instanceof IntegerVal iv )
+            return addIntegerVal(user,iv);
+        if( val instanceof FlagVal fv )
+            return addFlagVal(user,fv);
+        if( val instanceof TextVal tv )
+            return addTextVal(user,tv);
+        return val;
+    }
+    /* ******************************************************************************************************/
+    public void applyUser( ValUser user, boolean valOk ){
+        if( OneTimeValUser.isOneTime(user))
+            return;
+        if( valOk) {
+            if( !needCreations.contains(user)) // Make sure this isn't done if it's already in other one
+                needUpdates.add(user);
+        }else{
+            needCreations.add(user);
+            needUpdates.remove(user); // needCreations has priority
+        }
+    }
+    public void registerCreationUser( ValUser user ){
+        needCreations.add(user);
+    }
+    public void registerUpdateUser( ValUser user ){
+        needUpdates.add(user);
+    }
+    public void broadCastCreation( BaseVal val ){
+        if( needCreations.isEmpty() || val==null )
+            return;
+        for( var valUser : needCreations ){
+            if( valUser.provideVal(val) ){ // True means all dummies resolved
+                needUpdates.add(valUser); // So move to updates
+            }
+        }
+        // Remove the ones that were added to the other collection
+        needCreations.removeIf(needUpdates::contains);
+    }
+    public void broadcastReplacement( BaseVal val ){
+        if( needUpdates.isEmpty() || val==null)
+            return;
+        needUpdates.forEach(valUser ->valUser.provideVal(val) );
+    }
+    public boolean checkValUsers(){
+        var ok = true;
+        if( needCreations.isEmpty() ){
+            Logger.info("rtvals -> Need creation collection is empty");
+        }else{
+            Logger.error("rtvals -> Still missing "+needCreations.stream().map(ValUser::getValIssues).collect(Collectors.joining("; ")));
+            ok=false;
+        }
+        Logger.info("NeedUpdates contains "+needUpdates.size()+" elements.");
+        return ok;
+    }
     /**
      * Look through all the vals for one that matches the id
      *
      * @param id The id to find
      * @return An optional of the val, empty if not found
      */
-    public Optional<BaseVal> getBaseVal(String id) {
-        return Stream.of(realVals, integerVals, flagVals, textVals)  // Stream of your maps
-                .map(map -> (BaseVal) map.get(id))  // For each map, try to get the value by id
-                .filter(Objects::nonNull)  // Filter out any null results
-                .findFirst();  // Return the first non-null value (if any)
+    public BaseVal getBaseVal(ValUser user,String id) {
+
+        var r = getRealVal(OneTimeValUser.get(),id);
+        if( !r.isDummy()){
+            applyUser(user,true);
+            return r;
+        }
+        var i = getIntegerVal(OneTimeValUser.get(),id);
+        if( !i.isDummy()){
+            applyUser(user,true);
+            return i;
+        }
+        var f = getFlagVal(OneTimeValUser.get(),id);
+        if( !f.isDummy()){
+            applyUser(user,true);
+            return f;
+        }
+        var t = getTextVal(OneTimeValUser.get(),id);
+        if( !t.isDummy()){
+            applyUser(user,true);
+            return t;
+        }
+        applyUser(user,false);
+        return AnyDummy.createDummy(id);
     }
-    public Optional<NumericVal> getNumericalVal(String id) {
-        return Stream.of(realVals, integerVals, flagVals )  // Stream of your maps
-                .map(map -> (NumericVal) map.get(id))  // For each map, try to get the value by id
-                .filter(Objects::nonNull)  // Filter out any null results
-                .findFirst();  // Return the first non-null value (if any)
+    public NumericVal getNumericalVal(ValUser user,String id) {
+        var r = getRealVal(OneTimeValUser.get(),id);
+        if( !r.isDummy()){
+            applyUser(user,true);
+            return r;
+        }
+        var i = getIntegerVal(OneTimeValUser.get(),id);
+        if( !i.isDummy()){
+            applyUser(user,true);
+            return i;
+        }
+        var f = getFlagVal(OneTimeValUser.get(),id);
+        if( !f.isDummy()){
+            applyUser(user,true);
+            return f;
+        }
+        applyUser(user,false);
+        return AnyDummy.createDummy(id);
     }
     /**
      * Look through all the vals for one that matches the id
@@ -306,12 +385,26 @@ public class Rtvals implements Commandable {
         };
         if (av == null)
             return 0;
-        // av.addTarget(writable);
+        if( av instanceof RealVal rv ){
+            if( !(rv instanceof RealValSymbiote sy) ){
+                var sym = new RealValSymbiote(0,rv,new ValPrinter(av,writable));
+                addRealVal(OneTimeValUser.get(),sym);
+            }else{
+                sy.addUnderling(new ValPrinter(av,writable));
+            }
+        } else if ( av instanceof IntegerVal iv) {
+            if( !(iv instanceof IntegerValSymbiote sy) ){
+                var sym = new IntegerValSymbiote(0,iv,new ValPrinter(av,writable));
+                addIntegerVal(OneTimeValUser.get(),sym);
+            }else{
+                sy.addUnderling(new ValPrinter(av,writable));
+            }
+        }
         return 1;
     }
 
     public boolean addRequest(Writable writable, String rtval) {
-        var val = getBaseVal(rtval);
+        var val = getBaseVal(OneTimeValUser.get(), rtval);
         // TODO
         return false;
     }
@@ -387,7 +480,7 @@ public class Rtvals implements Commandable {
     public String applyUnit(BaseVal bv) {
 
         if (!(bv instanceof NumericVal nv)) {
-            return bv.name() + " : " + bv.asString() + bv.unit();
+            return bv.asString() + bv.unit();
         }
         if (units.isEmpty() || nv instanceof FlagVal)
             return nv.asString() + nv.unit() + nv.getExtraInfo();
@@ -511,15 +604,15 @@ public class Rtvals implements Commandable {
         NumericVal val;
 
         if (cmd.startsWith("r")) { // so real, rv
-            var rOpt = getRealVal(args[0]);
-            if (rOpt.isEmpty())
+            var rDum = getRealVal(OneTimeValUser.get(),args[0]);
+            if (rDum.isDummy())
                 return "! No such real yet";
-            val = rOpt.get();
+            val = rDum;
         } else { // so int,iv
-            var iOpt = getIntegerVal(args[0]);
-            if (iOpt.isEmpty())
+            var iDum = getIntegerVal(OneTimeValUser.get(),args[0]);
+            if (iDum.isDummy())
                 return "! No such int yet";
-            val = iOpt.get();
+            val = iDum;
         }
         var result = ValTools.processExpression(args[2], this);
         if (Double.isNaN(result))
@@ -554,10 +647,10 @@ public class Rtvals implements Commandable {
                 .selectOrAddChildAsParent("group", "id", group);
         if (cmd.startsWith("r")) { // So real
             fab.addChild("real").attr("name", name);
-            addRealVal(RealVal.newVal(group, name));
+            addRealVal( OneTimeValUser.get(), RealVal.newVal(group, name) );
         } else if (cmd.startsWith("i")) {
             fab.addChild("int").attr("name", name);
-            addIntegerVal(IntegerVal.newVal(group, name));
+            addIntegerVal(OneTimeValUser.get(), IntegerVal.newVal(group, name));
         }
         fab.build();
         return "Val added.";
@@ -568,18 +661,16 @@ public class Rtvals implements Commandable {
         if (cmd.equals("?"))
             return doFlagHelpCmd(html);
 
-        FlagVal flag;
         var args = cmd.split(",");
         if (args.length < 2)
             return "! Not enough arguments, at least: fv:id,cmd";
 
-        var flagOpt = getFlagVal(args[0]);
-        if (flagOpt.isEmpty()) {
+        var flag = getFlagVal(OneTimeValUser.get(),args[0]);
+        if (flag.isDummy()) {
             Logger.error("No such flag: " + args[0]);
             return "! No such flag yet";
         }
 
-        flag = flagOpt.get();
         if (args.length == 2) {
             switch (args[1]) {
                 case "raise", "set" -> {
@@ -596,20 +687,19 @@ public class Rtvals implements Commandable {
                 }
             }
         } else if (args.length == 3) {
+            var src = getFlagVal(OneTimeValUser.get(),args[2]);
+            if (src.isDummy())
+                return "! No such flag: " + args[2];
             switch (args[1]) {
                 case "update" -> {
                     return flag.parseValue(args[2]) ? "Flag updated" : "! Failed to parse state: " + args[2];
                 }
                 case "match" -> {
-                    if (!hasFlag(args[2]))
-                        return "! No such flag: " + args[2];
-                    getFlagVal(args[2]).ifPresent(to -> flag.value(to.isUp()));
+                    flag.value(src.isUp());
                     return "Flag matched accordingly";
                 }
                 case "negated", "negate" -> {
-                    if (!hasFlag(args[2]))
-                        return "! No such flag: " + args[2];
-                    getFlagVal(args[2]).ifPresent(to -> flag.value(!to.isUp()));
+                    flag.value(!src.isUp());
                     return "Flag negated accordingly";
                 }
             }
@@ -637,15 +727,12 @@ public class Rtvals implements Commandable {
         var cmds = args.split(",");
 
         // Get the TextVal if it exists
-        TextVal txt;
         if (cmds.length < 2)
             return "! Not enough arguments, at least: tv:id,cmd";
 
-        var txtOpt = getTextVal(cmds[0]);
-        if (txtOpt.isEmpty())
+        var txt = getTextVal(this,cmds[0]);
+        if (txt.isDummy())
             return "! No such text yet";
-
-        txt = txtOpt.get();
 
         // Execute the commands
         if (cmds[1].equals("update")) {
@@ -714,7 +801,28 @@ public class Rtvals implements Commandable {
 
     @Override
     public boolean removeWritable(Writable wr) {
-        // TODO
+        integerVals.values().stream().filter( iv -> iv instanceof IntegerValSymbiote ).forEach(
+                ivs -> {
+                    ((IntegerValSymbiote) ivs).removePrinterUnderling(wr);
+                }
+        );
+        realVals.values().stream().filter( iv -> iv instanceof RealValSymbiote ).forEach(
+                ivs -> {
+                    ((RealValSymbiote) ivs).removePrinterUnderling(wr);
+                }
+        );
         return false;
+    }
+
+    public boolean isWriter(){
+        return true;
+    }
+
+    @Override
+    public boolean provideVal(BaseVal val) {
+        return true;
+    }
+    public String id(){
+        return "rtvals";
     }
 }

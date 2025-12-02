@@ -8,7 +8,7 @@ import util.math.MathUtils;
 import java.util.*;
 import java.util.stream.Stream;
 
-public class ValStore {
+public class ValStore implements ValUser{
     private final ArrayList<BaseVal> localValRefs = new ArrayList<>();
     private ArrayList<BaseVal> calVal = new ArrayList<>();
     private ArrayList<String> calOps = new ArrayList<>();
@@ -26,7 +26,7 @@ public class ValStore {
     private String lastKey=""; // Last key trigger db store
 
     public ValStore(String id){
-        this.id=id;
+        this.id=id.isEmpty()?"store":id;
     }
 
     public void delimiter( String del ){
@@ -84,9 +84,9 @@ public class ValStore {
         valid = false;
     }
 
-    public void shareRealtimeValues(Rtvals rtv) {
-        valMap.replaceAll((k, v) -> rtv.AddIfNewAndRetrieve(v));
-        calVal.replaceAll(rtv::AddIfNewAndRetrieve);
+    public void shareRealtimeValues(Rtvals rtvals) {
+        valMap.replaceAll( (k, v) -> rtvals.AddIfNewAndRetrieve(this,v) );
+        calVal.replaceAll(rtv -> rtvals.AddIfNewAndRetrieve(this,rtv) );
     }
 
     public int size(){
@@ -98,6 +98,8 @@ public class ValStore {
     }
 
     public void addAbstractVal(BaseVal val) {
+        if( val.isDummy() )
+            Logger.info("Got a dummy instead of "+ val.id() );
         localValRefs.add(val);
     }
 
@@ -251,5 +253,47 @@ public class ValStore {
             join.add( "   At key "+val.getKey()+" -> "+val.getValue());
         }
         return join.toString();
+    }
+
+    public boolean isWriter() {
+        return true;
+    }
+    public boolean provideVal( BaseVal newVal ){
+
+        for( int a=0;a<localValRefs.size();a++ ){
+            var old = localValRefs.get(a);
+            if( old.id().equals(newVal.id()) ){
+                if( old.getClass().isInstance(newVal) || old instanceof AnyDummy ) {
+                    localValRefs.set(a, newVal);
+                    Logger.info(id()+" -> Replaced "+old.id() + (old.isDummy()?" (d)":""));
+                }
+            }
+        }
+        for( int a=0;a<calVal.size();a++ ){
+            var old = calVal.get(a);
+            if( old.id().equals(newVal.id()) ){
+                if( old.getClass().isInstance(newVal) || old instanceof AnyDummy ) {
+                    calVal.set(a, newVal);
+                    Logger.info(id()+" -> Replaced "+old.id() + (old.isDummy()?" (d)":""));
+                }
+            }
+        }
+        for( var val : localValRefs ){
+            if( val.isDummy() )
+                return false;
+        }
+        for( var val : calVal ){
+            if( val.isDummy() )
+                return false;
+        }
+        return true;
+    }
+
+    @Override
+    public String getValIssues() {
+        var join = new StringJoiner(";");
+        localValRefs.stream().filter(BaseVal::isDummy).forEach( v -> join.add(v.id()));
+        calVal.stream().filter(BaseVal::isDummy).forEach( v -> join.add(v.id()));
+        return "["+id()+" needs "+join+"]";
     }
 }

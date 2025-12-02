@@ -1,27 +1,30 @@
 package util.tasks.blocks;
 
 import org.tinylog.Logger;
+import util.data.vals.AnyDummy;
+import util.data.vals.BaseVal;
 import util.data.vals.NumericVal;
+import util.data.vals.ValUser;
 
-public class LogBlock extends AbstractBlock {
+public class LogBlock extends AbstractBlock implements ValUser {
     enum LEVEL {INFO, WARN, ERROR}
 
     LEVEL level;
     String message;
-    NumericVal[] refs=null;
+    BaseVal[] refs;
 
-    private LogBlock(LEVEL level, String message, NumericVal[] refs) {
+    private LogBlock(LEVEL level, String message, BaseVal[] refs) {
         this.level = level;
         this.message = id() + " -> " + message;
         this.refs=refs;
     }
     public String type(){ return "LogBlock";}
 
-    public static LogBlock info(String message, NumericVal[] refs) { return new LogBlock(LEVEL.INFO, message,refs); }
-    public static LogBlock warn(String message, NumericVal[] refs) {
+    public static LogBlock info(String message, BaseVal[] refs) { return new LogBlock(LEVEL.INFO, message,refs); }
+    public static LogBlock warn(String message, BaseVal[] refs) {
         return new LogBlock(LEVEL.WARN, message,refs);
     }
-    public static LogBlock error(String message, NumericVal[] refs) {
+    public static LogBlock error(String message, BaseVal[] refs) {
         return new LogBlock(LEVEL.ERROR, message,refs);
     }
 
@@ -63,5 +66,25 @@ public class LogBlock extends AbstractBlock {
             }
         }
         sendCallback(id() + " -> OK");
+    }
+    public boolean isWriter(){
+        return false;
+    }
+
+    @Override
+    public boolean provideVal(BaseVal val) {
+        boolean noDummies=true;
+        for( int a=0;a<refs.length;a++ ){
+            var old = refs[a];
+            if( old.isDummy())
+                noDummies=false;
+            if( old.id().equals(val.id()) ){
+                if( old.getClass().isInstance(val) || old instanceof AnyDummy) {
+                    refs[a] = val;
+                    Logger.info("Replaced "+old.id());
+                }
+            }
+        }
+        return noDummies;
     }
 }

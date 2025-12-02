@@ -7,8 +7,10 @@ import io.Writable;
 import io.netty.channel.EventLoopGroup;
 import org.tinylog.Logger;
 import util.LookAndFeel;
+import util.data.vals.BaseVal;
 import util.data.vals.RealVal;
 import util.data.vals.Rtvals;
+import util.data.vals.ValUser;
 import util.tools.TimeTools;
 import util.tools.Tools;
 import util.xml.XMLdigger;
@@ -21,7 +23,7 @@ import java.util.StringJoiner;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-public class Waypoints implements Commandable {
+public class Waypoints implements Commandable, ValUser {
 
     private final HashMap<String,Waypoint> wps = new HashMap<>();
     private final HashMap<String,GeoQuad> quads = new HashMap<>();
@@ -96,18 +98,9 @@ public class Waypoints implements Commandable {
 
         if( rtvals!=null) { // if RealtimeValues exist
             Logger.info("(wpts) -> Looking for lat, lon, sog");
-            var latOpt = rtvals.getRealVal( dig.attr("latval","") );
-            var longOpt = rtvals.getRealVal( dig.attr("lonval","") );
-            var sogOpt = rtvals.getRealVal( dig.attr("sogval","") );
-
-            if( latOpt.isEmpty() || longOpt.isEmpty() || sogOpt.isEmpty() ){
-                Logger.error( "(wpts) -> No corresponding lat/lon/sog realVals found for waypoints");
-                return false;
-            }
-
-            latitude = latOpt.get();
-            longitude = longOpt.get();
-            sog = sogOpt.get();
+            latitude = rtvals.getRealVal( this, dig.attr("latval","") );
+            longitude = rtvals.getRealVal( this, dig.attr("lonval","") );
+            sog = rtvals.getRealVal( this, dig.attr("sogval","") );
         }else{
             Logger.error("(wpts) -> Couldn't process waypoints because of missing rtvals");
             return false;
@@ -429,5 +422,26 @@ public class Waypoints implements Commandable {
     @Override
     public boolean removeWritable(Writable wr) {
         return false;
+    }
+
+    public boolean isWriter(){
+        return false;
+    }
+    public boolean provideVal( BaseVal bv ){
+        if( bv instanceof RealVal rv){
+            if( rv.id().equals(latitude.id()) ){
+                latitude=rv;
+            }
+            if( rv.id().equals(longitude.id()) ){
+                longitude=rv;
+            }
+            if( rv.id().equals(sog.id()) ){
+                sog=rv;
+            }
+        }
+        return !(latitude.isDummy()||longitude.isDummy()||sog.isDummy());
+    }
+    public String id(){
+        return "waypointscollection";
     }
 }

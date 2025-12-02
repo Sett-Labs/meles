@@ -23,6 +23,12 @@ public class FlagVal extends BaseVal implements NumericVal {
         return new FlagVal(group, name, "");
     }
 
+    public static FlagVal createDummy( String group, String name ){
+        var val = FlagVal.newVal(group,name);
+        val.markAsDummy();
+        return val;
+    }
+
     public void setBlocks(AbstractBlock highBlock, AbstractBlock lowBlock, AbstractBlock raiseBlock, AbstractBlock fallBlock) {
         this.raiseBlock = raiseBlock == null ? NoOpBlock.INSTANCE : raiseBlock;
         this.fallBlock = fallBlock == null ? NoOpBlock.INSTANCE : fallBlock;

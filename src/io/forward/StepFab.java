@@ -122,13 +122,12 @@ public class StepFab {
         var refs = ParseTools.extractCurlyContent(cmd, true);
         if (!refs.isEmpty()) {
             for (int a = 0; a < refs.size(); a++) {
-                var val = rtvals.getBaseVal(refs.get(a));
-                if (val.isEmpty()) {
+                var val = rtvals.getBaseVal(step,refs.get(a));
+                if (val.isDummy()) {
                     Logger.error("Didn't find a match for " + refs.get(a) + " as part of " + cmd);
-                } else {
-                    step.addRtval(val.get());
-                    cmd = cmd.replace("{" + refs.get(a) + "}", "{" + a + "}");
                 }
+                step.addRtval(val);
+                cmd = cmd.replace("{" + refs.get(a) + "}", "{" + a + "}");
             }
         }
         // Find all the i's

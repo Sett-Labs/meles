@@ -33,7 +33,7 @@ import util.xml.XMLdigger;
 import util.xml.XMLfab;
 import util.xml.XMLtools;
 import worker.Datagram;
-import worker.LabelWorker;
+import worker.DatagramWorker;
 import worker.RawWorker;
 
 import java.io.File;
@@ -57,7 +57,7 @@ public class Meles implements Commandable{
 
     /* Workers */
     private EmailWorker emailWorker; // Worker that processes email requests
-    private LabelWorker labelWorker; // Worker that processes datagrams
+    private DatagramWorker datagramWorker; // Worker that processes datagrams
     private I2CWorker i2cWorker; // Worker that interacts with i2c devices
 
     /* */
@@ -72,7 +72,7 @@ public class Meles implements Commandable{
     private DatabaseManager dbManager; // Manager for the database interaction
     private MqttPool mqttPool; // Pool for the mqtt connections
     private CollectorPool collectorPool; // Pool of the collector objects (mainly filecollectors)
-    private CommandPool commandPool; // Pool that holds the references to all the commandables
+    private CommandHub commandhub; // Pool that holds the references to all the commandables
     private boolean bootOK = false; // Flag to show if booting went ok
     String sdReason = "Unwanted shutdown."; // Reason for shutdown of das, default is unwanted
 
@@ -92,6 +92,8 @@ public class Meles implements Commandable{
     /* Threading */
     private final EventLoopGroup nettyGroup = new NioEventLoopGroup(2, new DefaultThreadFactory("Global-group")); // Single group so telnet,trans and StreamManager can share it
 
+    private PathPool pathPool;
+
     public Meles() {
 
         tinylogPath = figureOutTinyLogPath();   // This needs to be done before tinylog is used because it sets the paths
@@ -104,7 +106,7 @@ public class Meles implements Commandable{
         digForSettings( digger );   // Dig for the settings node
 
         /* CommandPool */
-        commandPool = new CommandPool( );
+        commandhub = new CommandHub( );
         addCommandable(this,"st"); // add the commands found in this file
 
         addRtvals();            // Add Realtimevalues
@@ -113,10 +115,10 @@ public class Meles implements Commandable{
         dbManager = new DatabaseManager(rtvals);
         addCommandable(dbManager,"dbm","myd");
 
-        addLabelWorker();       // Add Label worker
+        addDatagramWorker();       // Add Label worker
         addStreamManager();     // Add Stream manager
         addI2CWorker();         // Add I2C
-        addTaskManagerPool();       // Add Taskmanagers
+        addTaskManagerPool();   // Add Taskmanagers
 
         prepareForwards();      // Add forwards
 
@@ -213,7 +215,7 @@ public class Meles implements Commandable{
         addCommandable(rtvals,"stop");
     }
     private void prepareForwards(){
-        var pathPool = new PathPool(rtvals);
+        pathPool = new PathPool(rtvals);
         addCommandable(pathPool,"paths","path","pf");
         addCommandable(pathPool, ""); // empty cmd is used to stop data requests
     }
@@ -329,9 +331,9 @@ public class Meles implements Commandable{
      */
     public void addCommandable(Commandable cmd, String... ids) {
         if (ids.length == 1) {
-            Stream.of(ids[0].split(";")).forEach(id -> commandPool.addCommandable(id, cmd));
+            Stream.of(ids[0].split(";")).forEach(id -> commandhub.addCommandable(id, cmd));
         } else {
-            Stream.of(ids).forEach(id -> commandPool.addCommandable(id, cmd));
+            Stream.of(ids).forEach(id -> commandhub.addCommandable(id, cmd));
         }
     }
     /* ***************************************  T A S K M A N A G E R ********************************************/
@@ -340,7 +342,6 @@ public class Meles implements Commandable{
      */
     private void addTaskManagerPool() {
         taskManagerPool = new TaskManagerPool(rtvals);
-        taskManagerPool.reloadAll();
         addCommandable(taskManagerPool, "tm");
     }
     /* ******************************************  S T R E A M P O O L ***********************************************/
@@ -369,10 +370,10 @@ public class Meles implements Commandable{
     /**
      * Adds the LabelWorker that will process the datagrams
      */
-    private void addLabelWorker() {
-        if (this.labelWorker == null)
-            labelWorker = new LabelWorker();
-        labelWorker.setCommandReq(commandPool);
+    private void addDatagramWorker() {
+        if (this.datagramWorker == null)
+            datagramWorker = new DatagramWorker();
+        datagramWorker.setCommandReq(commandhub);
     }
     /* ***************************************** M Q T T ******************************************************** */
 
@@ -403,7 +404,7 @@ public class Meles implements Commandable{
         Logger.info("Adding EmailWorker");
         emailWorker = new EmailWorker();
         addCommandable(emailWorker,"email");
-        commandPool.setEmailSender(emailWorker);
+        commandhub.setEmailSender(emailWorker);
     }
     /* ***************************************  T E L N E T S E R V E R ******************************************/
     /**
@@ -506,7 +507,7 @@ public class Meles implements Commandable{
     private void sendShutdownEmails(){
         if (emailWorker != null) {
             Logger.info("Informing admin");
-            String r = commandPool.getShutdownReason();
+            String r = commandhub.getShutdownReason();
             sdReason = r.isEmpty()?sdReason:r;
             emailWorker.sendEmail( Email.toAdminAbout(telnet.getTitle() + " shutting down.").content("Reason: " + sdReason) );
         }
@@ -528,18 +529,9 @@ public class Meles implements Commandable{
      */
     public void startAll() {
 
-        if (labelWorker != null) {
-            Logger.info("Starting LabelWorker...");
-            new Thread(labelWorker, "LabelWorker").start();// Start the thread
-        }
-
-        if (trans != null && trans.isActive()) {
-            Logger.info( "Starting transserver");
-            trans.run(); // Start the server
-        }
-        if (telnet != null) {
-            Logger.info("Starting telnet server");
-            telnet.run(); // Start the server
+        if (datagramWorker != null) {
+            Logger.info("Starting datagramWorker...");
+            new Thread(datagramWorker, "datagramWorker").start();// Start the thread
         }
 
         // TaskManager
@@ -548,8 +540,22 @@ public class Meles implements Commandable{
             taskManagerPool.reloadAll();
             taskManagerPool.getTasKManagerIds().forEach(id -> addCommandable(taskManagerPool, id));
             taskManagerPool.enableWatcher();
-            //  if( !errors.isEmpty())
-            //     telnet.addMessage("Errors during TaskManager parsing:\r\n"+errors);
+        }
+
+        if( !rtvals.checkValUsers() ) {
+            Logger.error("Rtvals not complete, aborting.");
+            System.exit(0);
+        }
+        if( mqttPool != null )
+            mqttPool.startWorkers();
+
+        if (trans != null && trans.isActive()) {
+            Logger.info( "Starting transserver");
+            trans.run(); // Start the server
+        }
+        if (telnet != null) {
+            Logger.info("Starting telnet server");
+            telnet.run(); // Start the server
         }
         // Matrix
         if( matrixClient != null ){
@@ -705,7 +711,7 @@ public class Meles implements Commandable{
      */
     public String getQueueSizes() {
         StringJoiner join = new StringJoiner("\r\n", "", "\r\n");
-        join.add("Data buffer: " + Core.queueSize() + " in receive buffer and "+ labelWorker.getWaitingQueueSize()+" waiting...");
+        join.add("Data buffer: " + Core.queueSize() + " in receive buffer and "+ datagramWorker.getWaitingQueueSize()+" waiting...");
 
         if (emailWorker != null)
             join.add("Email backlog: " + emailWorker.getRetryQueueSize() );

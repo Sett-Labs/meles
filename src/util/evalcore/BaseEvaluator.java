@@ -1,9 +1,14 @@
 package util.evalcore;
 
 import org.tinylog.Logger;
+import util.data.vals.AnyDummy;
+import util.data.vals.BaseVal;
 import util.data.vals.NumericVal;
+import util.data.vals.ValUser;
 
-public class BaseEvaluator {
+import java.util.StringJoiner;
+
+public class BaseEvaluator implements ValUser {
     // Info for debugging
     protected String originalExpression;
     protected String normalizedExpression;
@@ -46,5 +51,34 @@ public class BaseEvaluator {
 
     public boolean isInValid() {
         return !valid;
+    }
+
+    @Override
+    public boolean isWriter() {
+        return false;
+    }
+    public boolean provideVal( BaseVal newVal){
+        boolean noDummies = true;
+        for( int a=0;a<refs.length;a++){
+            if( refs[a].getClass().isInstance(newVal) || refs[a] instanceof AnyDummy ) {
+                if( refs[a].id().equals(newVal.id()))
+                    refs[a] = (NumericVal) newVal;
+            }
+            if( refs[a].isDummy())
+                noDummies=false;
+        }
+        return noDummies;
+    }
+    public String id(){
+        return "eval:"+id;
+    }
+    @Override
+    public String getValIssues() {
+        var join = new StringJoiner(";");
+        for( var ref : refs ){
+            if( ref.isDummy())
+                join.add(ref.id());
+        }
+        return "["+id()+" needs "+join+"]";
     }
 }

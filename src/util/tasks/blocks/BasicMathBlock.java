@@ -1,9 +1,12 @@
 package util.tasks.blocks;
 
 import org.tinylog.Logger;
+import util.data.vals.AnyDummy;
+import util.data.vals.BaseVal;
 import util.data.vals.NumericVal;
+import util.data.vals.ValUser;
 
-public class BasicMathBlock extends AbstractBlock {
+public class BasicMathBlock extends AbstractBlock implements ValUser {
 
     enum OP {COPY, INCREMENT, DECREMENT, RESET, NOOP}
 
@@ -63,5 +66,32 @@ public class BasicMathBlock extends AbstractBlock {
         }
         doNext();
         return true;
+    }
+    @Override
+    public boolean isWriter() {
+        return false;
+    }
+    public boolean provideVal( BaseVal newVal ){
+        if( !(newVal instanceof NumericVal nv) )
+            return false;
+        boolean noDummies=true;
+        for( int a=0;a<targetVal.length;a++ ){
+            var old = targetVal[a];
+            if( targetVal[a].isDummy())
+                noDummies=false;
+            if( old.id().equals(nv.id()) ){
+                if( old.getClass().isInstance(nv) || old instanceof AnyDummy) {
+                    targetVal[a] = nv;
+                    Logger.info("Replaced "+old.id());
+                }
+            }
+        }
+        if( sourceVal.id().equals(nv.id()) ){
+            if( sourceVal.getClass().isInstance(nv) || sourceVal instanceof AnyDummy) {
+                sourceVal = nv;
+                Logger.info("Replaced "+sourceVal.id());
+            }
+        }
+        return noDummies && !sourceVal.isDummy();
     }
 }

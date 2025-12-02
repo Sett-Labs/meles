@@ -4,6 +4,7 @@ import org.apache.commons.lang3.math.NumberUtils;
 import org.tinylog.Logger;
 import util.data.procs.MathEvalForVal;
 import util.data.vals.NumericVal;
+import util.data.vals.OneTimeValUser;
 import util.data.vals.RealVal;
 import util.data.vals.Rtvals;
 import util.math.MathUtils;
@@ -78,6 +79,9 @@ public class MathFab {
         if (expression.isEmpty()) // Errors are logged in the method, so can just quit.
             return mathEval;
 
+        if( !refs.isEmpty() )
+            rtvals.applyUser(mathEval,refs.stream().noneMatch(NumericVal::isDummy));
+
         // At this point the expression should be ready for actual parsing and refs are final
         mathEval.setNormalized(expression);
         mathEval.setRefs(refs.toArray(NumericVal[]::new));
@@ -105,7 +109,7 @@ public class MathFab {
                 return mathEval;
             mathEval.addOp(a, op);
         }
-
+        rtvals.applyUser(mathEval,false);
         return mathEval.makeValid();
     }
 
@@ -204,23 +208,17 @@ public class MathFab {
         // References to rtvals
         if (equation.contains("{")) {
             equation = equation.substring(1, equation.length() - 1);
-            var valOpt = rtvals.getBaseVal(equation);
-            if (valOpt.isEmpty()) {
+            var val = rtvals.getNumericalVal(OneTimeValUser.get(), equation);
+            if ( val.isDummy() ) {
                 Logger.error("No such val yet: " + equation);
                 return -1;
             }
-            var val = valOpt.get();
-            if (val instanceof NumericVal nv) {
-                int index = refs.indexOf(val);
-                if (index != -1) {
-                    return index + 100;
-                } else {
-                    refs.add(nv);
-                    return refs.size() - 1 + 100; // -1 to get index and +100 for the offset
-                }
+            int index = refs.indexOf(val);
+            if (index != -1) {
+                return index + 100;
             } else {
-                Logger.error(equation + " not a numeric value, can't use it in math");
-                return -1;
+                refs.add(val);
+                return refs.size() - 1 + 100; // -1 to get index and +100 for the offset
             }
         }
         // References to temp data

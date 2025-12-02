@@ -3,7 +3,9 @@ package util.database;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.tinylog.Logger;
 import util.data.store.ValStore;
+import util.data.vals.BaseVal;
 import util.data.vals.FlagVal;
+import util.data.vals.ValUser;
 import util.tools.FileTools;
 import util.tools.TimeTools;
 import util.xml.XMLfab;
@@ -18,7 +20,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
 
-public class SqlTable{
+public class SqlTable implements ValUser {
 
     private final HashMap<String, SqlTableFab.PrepStatement> preps = new HashMap<>();
     private final String tableName;
@@ -220,7 +222,7 @@ public class SqlTable{
      * 
      * @return Info message
      */
-    public String getInfo() {
+    public String getValIssues() {
         StringJoiner join = new StringJoiner("\r\n", "Table '" + tableName + "'\r\n", "");
         for (SqlColumn column : columns) {
             join.add("> " + column.toString()
@@ -472,5 +474,19 @@ public class SqlTable{
         });
         stat.setStatement( cols + qMarks.toString() );
     }
-
+    public boolean isWriter(){
+        return false;
+    }
+    public boolean provideVal( BaseVal newVal ){
+        if( newVal instanceof FlagVal fv ){
+            if( fv.id().equals(allowInserts.id())) {
+                allowInserts = fv;
+                return true;
+            }
+        }
+        return false;
+    }
+    public String id(){
+        return "table:"+tableName;
+    }
 }

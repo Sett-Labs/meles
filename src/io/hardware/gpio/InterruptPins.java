@@ -8,16 +8,14 @@ import meles.Core;
 import meles.Paths;
 import io.Writable;
 import org.tinylog.Logger;
-import util.data.vals.IntegerVal;
-import util.data.vals.RealVal;
-import util.data.vals.Rtvals;
+import util.data.vals.*;
 import util.xml.XMLdigger;
 import worker.Datagram;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class InterruptPins implements DeviceEventConsumer<DigitalInputEvent>, Commandable {
+public class InterruptPins implements DeviceEventConsumer<DigitalInputEvent>, Commandable, ValUser {
 
     private final HashMap<String,DigitalInputDevice> inputs = new HashMap<>();
     private final HashMap<Integer,ArrayList<IsrAction>> isrs = new HashMap<>();
@@ -106,13 +104,13 @@ public class InterruptPins implements DeviceEventConsumer<DigitalInputEvent>, Co
         if (!isrDig.hasPeek("counter"))
             return;
         var val = isrDig.value("");
-        var intOpt = rtvals.getIntegerVal(val);
-        if (intOpt.isPresent()) {
+        var intOpt = rtvals.getIntegerVal(OneTimeValUser.get(),val);
+        if (intOpt.isDummy()) {
+            Logger.error("(isr) -> No such int yet '" + val + "'");
+        } else {
             Logger.info("(isr) -> Added counting isr saving to " + val
                     + " after interrupt on " + pinInfo.getDeviceNumber() + ".");
-            addIsrAction(pinInfo.getDeviceNumber(), new IsrCounter(intOpt.get()));
-        } else {
-            Logger.error("(isr) -> No such int yet '" + val + "'");
+            addIsrAction(pinInfo.getDeviceNumber(), new IsrCounter(intOpt));
         }
     }
 
@@ -124,13 +122,13 @@ public class InterruptPins implements DeviceEventConsumer<DigitalInputEvent>, Co
         var updateRate = isrDig.attr("updaterate", 1);
         var val = isrDig.value("");
 
-        var realOpt = rtvals.getRealVal(val);
-        if (realOpt.isPresent()) {
+        var realOne = rtvals.getRealVal(OneTimeValUser.get(),val);
+        if (realOne.isDummy()) {
+            Logger.error("(isr) -> No such real yet '" + val + "'");
+        } else {
             Logger.info("(isr) -> Added frequency isr saving to " + val
                     + " after interrupt on " + pinInfo.getDeviceNumber() + ".");
-            addIsrAction(pinInfo.getDeviceNumber(), new IsrFrequency(realOpt.get(), samples, updateRate));
-        } else {
-            Logger.error("(isr) -> No such real yet '" + val + "'");
+            addIsrAction(pinInfo.getDeviceNumber(), new IsrFrequency(realOne, samples, updateRate));
         }
     }
 
@@ -143,12 +141,13 @@ public class InterruptPins implements DeviceEventConsumer<DigitalInputEvent>, Co
         } else {
             var idle = isrDig.peekAt("period").attr("idle", true);
             var val = isrDig.value("");
-            var periodOpt = rtvals.getRealVal(val);
-            if (periodOpt.isEmpty()) {
-                Logger.error("(isr) -> No such real " + val + ".");
-            } else {
-                Logger.info("(isr) -> Added period isr saving to " + val + " with idle " + (idle ? "high" : "low"));
-                addIsrAction(pinInfo.getDeviceNumber(), new IsrPeriod(periodOpt.get(), idle));
+            var periodOne = rtvals.getRealVal(OneTimeValUser.get(),val);
+
+            Logger.info("(isr) -> Added period isr saving to " + val + " with idle " + (idle ? "high" : "low"));
+            if(periodOne.isDummy()){
+                Logger.error("(isr) -> No such real yet '" + val + "'");
+            }else{
+                addIsrAction(pinInfo.getDeviceNumber(), new IsrPeriod( periodOne, idle));
             }
         }
     }
@@ -296,5 +295,14 @@ public class InterruptPins implements DeviceEventConsumer<DigitalInputEvent>, Co
             cmds.forEach(cmd -> Core.addToQueue(Datagram.system(cmd)));
         }
     }
-
+    public boolean isWriter(){
+        return false;
+    }
+    public boolean provideVal( BaseVal val){
+        Logger.error("Not implemented yet");
+        return false;
+    }
+    public String id(){
+        return "isr";
+    }
 }
