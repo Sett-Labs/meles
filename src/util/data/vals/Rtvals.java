@@ -103,7 +103,7 @@ public class Rtvals implements Commandable,ValUser {
             var old = realVals.get(rv.id());
             if( ! (old instanceof RealValSymbiote) && old !=null ){
                 realVals.remove(rv.id());
-                System.out.println("Received symbiote, removing the real that it encapsulates");
+
             }
         }
         if( realVals.putIfAbsent(rv.id(), rv) == null ) {
@@ -136,9 +136,6 @@ public class Rtvals implements Commandable,ValUser {
         }
         return realVals.containsKey(id);
     }
-
-
-
     /**
      * Sets the value of a real (in the hashmap)
      *
@@ -169,8 +166,7 @@ public class Rtvals implements Commandable,ValUser {
         if( iv instanceof IntegerValSymbiote ){
             var old = integerVals.get(iv.id());
             if( ! (old instanceof IntegerValSymbiote) && old !=null ){
-                integerVals.remove(iv.id());
-                System.out.println("Received symbiote, removing the integer that it encapsulates");
+                upgradeToIntegerSymbiote(iv);
             }
         }
         if( integerVals.putIfAbsent(iv.id(), iv) == null ) {
@@ -184,7 +180,35 @@ public class Rtvals implements Commandable,ValUser {
         applyUser(user,true);
         return integerVals.get(iv.id());
     }
-
+    public IntegerValSymbiote upgradeToIntegerSymbiote( IntegerVal iv ){
+        var reg = integerVals.get(iv.id());
+        IntegerValSymbiote ivs;
+        if( reg.isDummy() ){// No such variable exist yet, so create it
+            if( iv instanceof IntegerValSymbiote sym ){
+                ivs=sym;
+            }else{
+                ivs = new IntegerValSymbiote(0, iv );
+            }
+            integerVals.put(ivs.id(),ivs);
+            broadCastCreation(ivs);
+        }else if( !(reg instanceof IntegerValSymbiote)){ // Exist, so encapsulate
+            if( iv instanceof IntegerValSymbiote sym ){ // Giving a symb, so use it
+                ivs=sym;
+            }else{
+                ivs = new IntegerValSymbiote(0, iv );
+            }
+            for( var i : integerVals.entrySet() ){
+                if( i.getValue() instanceof IntegerValSymbiote s )
+                    s.replaceUnderling(ivs);
+            }
+            integerVals.put(ivs.id(),ivs); // overwrite the old one
+            broadcastReplacement(ivs);
+        }else{
+            Logger.info("Already a symbiote, not touching it");
+            ivs=(IntegerValSymbiote) reg;
+        }
+        return ivs;
+    }
     public boolean hasInteger(String id) {
         return integerVals.containsKey(id);
     }
@@ -394,8 +418,8 @@ public class Rtvals implements Commandable,ValUser {
             }
         } else if ( av instanceof IntegerVal iv) {
             if( !(iv instanceof IntegerValSymbiote sy) ){
-                var sym = new IntegerValSymbiote(0,iv,new ValPrinter(av,writable));
-                addIntegerVal(OneTimeValUser.get(),sym);
+                var sym = upgradeToIntegerSymbiote(iv);
+                sym.addUnderling(new ValPrinter(av,writable));
             }else{
                 sy.addUnderling(new ValPrinter(av,writable));
             }
@@ -440,12 +464,21 @@ public class Rtvals implements Commandable,ValUser {
                 .filter(bv -> bv instanceof RealValSymbiote)
                 .map(rv -> (RealValSymbiote) rv)
                 .toList();
+        var symInt = Stream.of(integerVals)
+                .flatMap(bv -> bv.values().stream())
+                .filter(bv -> bv.group().equalsIgnoreCase(group))
+                .filter(bv -> bv instanceof IntegerValSymbiote)
+                .map(rv -> (IntegerValSymbiote) rv)
+                .toList();
 
         for (var sym : syms) {
             for (var derived : sym.getDerived())
                 tempList.remove(derived);
         }
-
+        for (var sym : symInt) {
+            for (var derived : sym.getDerived())
+                tempList.remove((BaseVal)derived);
+        }
         String title;
         if (group.isEmpty()) {
             title = html ? "<b>Ungrouped</b>" : TelnetCodes.TEXT_CYAN + "Ungrouped" + TelnetCodes.TEXT_DEFAULT;
@@ -460,16 +493,25 @@ public class Rtvals implements Commandable,ValUser {
         int maxLength = tempList.stream().mapToInt(bv -> bv.name().length()).max().orElse(0);  // Get the max value
 
         for (var val : tempList) {
-            if (val instanceof RealValSymbiote sym) {
+            if (val instanceof RealValSymbiote rSym) {
                 DynamicUnit du = null;
                 for (var entry : units.entrySet()) {
-                    if (entry.getKey().contains(sym.unit())) {
+                    if (entry.getKey().contains(rSym.unit())) {
                         du = entry.getValue();
                         break;
                     }
                 }
-                join.add(LookAndFeel.prettyPrintSymbiote(sym, "", "", crop, du));
-            } else {
+                join.add(LookAndFeel.prettyPrintSymbiote(rSym, "", "", crop, du));
+            } else if (val instanceof IntegerValSymbiote iSym) {
+                DynamicUnit du = null;
+                for (var entry : units.entrySet()) {
+                    if (entry.getKey().contains(iSym.unit())) {
+                        du = entry.getValue();
+                        break;
+                    }
+                }
+                join.add(LookAndFeel.prettyPrintSymbiote(iSym, "", "", crop, du));
+            }else {
                 join.add(String.format("%-" + maxLength + "s : %s", val.name(), applyUnit(val)));
             }
         }

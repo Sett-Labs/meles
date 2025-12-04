@@ -24,7 +24,20 @@ public class RtvalsParser {
         ArrayList<RtvalsParser.ValCell> vals = new ArrayList<>();
         parseRtvals(cells, tools, vals, file);
     }
+    public static ConditionBlock parseRtvals2(HashMap<String, Drawio.DrawioCell> cells, TaskParser.TaskTools tools, ArrayList<RtvalsParser.ValCell> vals, Path file) {
+        ArrayList<Drawio.DrawioCell> starts = new ArrayList<>();
 
+        // Figure out the starters
+        for (var entry : cells.entrySet()) {
+            if( entry.getValue().getType().equals("valupdater") )
+                starts.add(entry.getValue());
+        }
+        // Process the starters
+        for( var start : starts ){
+
+        }
+        return null;
+    }
     public static ConditionBlock parseRtvals(HashMap<String, Drawio.DrawioCell> cells, TaskParser.TaskTools tools, ArrayList<RtvalsParser.ValCell> vals, Path file) {
         // First create all the origins and then populate with the rest because controlblocks need a full list during set up
         ArrayList<Drawio.DrawioCell> starts = new ArrayList<>();
@@ -34,17 +47,18 @@ public class RtvalsParser {
 
             var opt = Drawio.findTargetingCell(cells,cell,"derive");
             if( opt.isPresent() ){
-                if( opt.get().type.equals("integerval")){
+                if( opt.get().getType().equals("integerval")){
                     var validIntRed = Reducer.isValidIntegerReducer(cell.getParam("reducer",""));
-                    if( validIntRed && cell.type.equals("realval") ){
-                        cell.type = "integerval";
+                    if( validIntRed && cell.getType().equals("realval") ){
+                        cell.setType("integerval");
+                        cell.setParam("melestype","integerval");
                     }
                 }
                 var group = cell.getParam("group","");
                 if( group.isEmpty() || group.equals("??") ) // If no group was provided, give it the same as origin
                     cell.setParam("group",opt.get().getParam("group",group));
             }
-            switch (cell.type) {
+            switch (cell.getType()) {
                 case "realval" -> addToValsIfNew(doRealVal(cell, tools), cell, vals);
                 case "integerval" -> addToValsIfNew(doIntegerVal(cell, tools), cell, vals);
                 case "flagval" -> addToValsIfNew(doFlagVal(cell, tools), cell, vals);
@@ -52,8 +66,6 @@ public class RtvalsParser {
                 case "valupdater" -> starts.add(cell);
             }
         }
-
-
         parseTasks(starts, tools, vals);
         DrawioEditor.addIds(tools.idRef(), file);
         TaskParser.fixControlBlocks(cells, tools);
@@ -181,6 +193,7 @@ public class RtvalsParser {
         for (var cell : starters) {
             var label = cell.getParam("arrowlabel", "update");
             var target = cell.getArrowTarget(label);
+
             if(target==null)
                 target = cell.getArrowTarget("next");
 
@@ -218,8 +231,10 @@ public class RtvalsParser {
         int scale = 6;
 
         // Do everything up to the rtval
+        boolean targetChanged;
         while (valcell == null && target!=null) {
-            switch (target.type) {
+            targetChanged=false;
+            switch (target.getType()) {
                 case "realval", "integerval" -> {
                     for (var vc : vals) {
                         valcell = buildRealIntegerVal(vc, target, pre, post, builtin, math, scale);
@@ -227,7 +242,7 @@ public class RtvalsParser {
                             break;
                     }
                     if (valcell == null) {
-                        Logger.error("Couldn't match shape with a val: " + target.type);
+                        Logger.error("Couldn't match shape with a val: " + target.getType());
                     }
                 }
                 case "conditionblock" -> {
@@ -241,7 +256,8 @@ public class RtvalsParser {
                     }
 
                     // that's precheck?
-                    target = getNext(target, label, "ok", "next");
+                    target = getNext(target, label, "ok", "yes","next");
+                    targetChanged=true;
                     if (target == null) {
                         Logger.error("Not found a block after the conditionblock with exp: " + exp);
                         return null;
@@ -272,6 +288,7 @@ public class RtvalsParser {
                     }
                     if (t != null) {
                         target = t;
+                        targetChanged=true;
                     } else {
                         Logger.error("Not found a block after the mathblock with exp: " + mexp + " or builtin:" + builtin);
                         return null;
@@ -279,6 +296,10 @@ public class RtvalsParser {
                 }
                 default -> {
                 }
+            }
+            if( valcell==null && !targetChanged ){
+                Logger.error("Couldn't find match, aborting");
+                break;
             }
         }
         if( valcell==null)
@@ -312,7 +333,7 @@ public class RtvalsParser {
                 }
                 valcell = new ValCell(symb, valcell.cell()); // Overwrite the cell?
             } else if (valcell.val() instanceof IntegerVal iv) {
-                IntegerValSymbiote symb = new IntegerValSymbiote(0, iv, new NumericVal[1]);
+                IntegerValSymbiote symb = new IntegerValSymbiote(0, iv);
                 rtvals.addIntegerVal(OneTimeValUser.get(),symb);
                 processDerives(valcell, label, tools, vals).forEach(symb::addUnderling);
                 valcell = new ValCell(symb, valcell.cell());
@@ -343,7 +364,7 @@ public class RtvalsParser {
                 valcell.val().setMath(math);
             } else if (!builtin.isEmpty()) {
                 if( target.getParam("window",-1)==0 ){ // Aggregator
-                    if (target.type.startsWith("real")) {
+                    if (target.getType().startsWith("real")) {
                         if (Builtin.isValidDoubleProc(builtin)) {
                             valcell.val().setMath(Builtin.getDoubleFunction(builtin, scale));
                         } else {
@@ -372,7 +393,7 @@ public class RtvalsParser {
         while (target != null) {
             var result = buildValCel(target, label, tools, vals);
             if (result == null) {
-                Logger.error("Failed to parse derive of type " + valcell.cell().type);
+                Logger.error("Failed to parse derive of type " + valcell.cell().getType());
                 return unders;
             }
             unders.add(result.val());

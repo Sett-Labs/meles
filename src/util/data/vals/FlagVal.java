@@ -1,6 +1,7 @@
 package util.data.vals;
 
 import org.tinylog.Logger;
+import util.data.procs.MathEvalForVal;
 import util.tasks.blocks.AbstractBlock;
 import util.tasks.blocks.NoOpBlock;
 import util.tools.Tools;
@@ -122,5 +123,10 @@ public class FlagVal extends BaseVal implements NumericVal {
     @Override
     public void triggerUpdate() {
         update(true);
+    }
+
+    @Override
+    public MathEvalForVal getMath() {
+        return null;
     }
 }

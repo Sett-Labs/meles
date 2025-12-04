@@ -36,7 +36,7 @@ public class TaskParser {
         ArrayList<OriginCell> oricell = new ArrayList<>();
         for (var entry : cells.entrySet()) {
             var cell = entry.getValue();
-            if (cell.type.equals("originblock")) { // Look for originblocks
+            if (cell.getType().equals("originblock")) { // Look for originblocks
                 var origin = doOriginBlock(cell);
                 origins.add(origin);
                 oricell.add(new OriginCell(origin, cell));
@@ -72,7 +72,7 @@ public class TaskParser {
         if (cell == null)
             return null;
 
-        return switch (cell.type) {
+        return switch (cell.getType()) {
             case "basicvalblock" -> doAlterValBlock(cell, tools, id);
             case "clockblock" -> doClockBlock(cell, tools, id);
             case "controlblock" -> doControlBlock(cell, tools, id);
@@ -194,7 +194,7 @@ public class TaskParser {
             return null;
         }
         var cmd = cell.getParam("cmd", cell.getParam("message", ""));
-        cmd = switch (cell.type) {
+        cmd = switch (cell.getType()) {
             case "errorblock" -> "log:error," + cmd;
             case "warnblock" -> "log:warn," + cmd;
             case "infoblock" -> "log:info," + cmd;
@@ -224,7 +224,7 @@ public class TaskParser {
         cb.ifPresent(block -> {
             block.id(blockId);
             var target = cell.getArrowTarget("update");
-            if (target != null && target.type.equals("flagval")) {
+            if (target != null && target.getType().equals("flagval")) {
                 var flagId = target.getParam("group", "") + "_" + target.getParam("name", "");
                 block.setFlag( rtvals.getFlagVal(block,flagId) );
 
@@ -394,7 +394,7 @@ public class TaskParser {
 
         if( flagId.equals("??_??") || flagId.isEmpty() ){ // Find the flag being pointed to?
             var tar = cell.getArrowTarget("next");
-            if( tar==null || (!tar.type.equals("flagval")&& !tar.type.equals("outputpin"))) {
+            if( tar==null || (!tar.getType().equals("flagval")&& !tar.getType().equals("outputpin"))) {
                 Logger.error(blockId + " -> Flagblock without flagval id specified or flag targeted.");
                 return null;
             }
@@ -403,8 +403,8 @@ public class TaskParser {
 
             boolean exists = tools.rtvals().hasFlag(flagId);
 
-            Logger.info("Found "+flagId+"? "+exists+ " type:"+tar.type);
-            if( !exists && tar.type.equals("outputpin") ){
+            Logger.info("Found "+flagId+"? "+exists+ " type:"+tar.getType());
+            if( !exists && tar.getType().equals("outputpin") ){
                 doOutputPin(tar,tools,"");
             }else{
                 Logger.info("Outputpin already exists, reusing");
@@ -488,7 +488,7 @@ public class TaskParser {
                         .map(it-> tools.rtvals().getBaseVal(OneTimeValUser.get(),it))
                         .toArray(BaseVal[]::new);
 
-        var lb = switch (cell.type) {
+        var lb = switch (cell.getType()) {
             case "errorblock" -> LogBlock.error(message,refs);
             case "warnblock" -> LogBlock.warn(message,refs);
             case "infoblock" -> LogBlock.info(message,refs);

@@ -101,6 +101,12 @@ public class IntegerVal extends BaseVal implements NumericVal {
     public void setMath(MathEvalForVal bin) {
         math = bin;
     }
+
+    @Override
+    public MathEvalForVal getMath() {
+        return math;
+    }
+
     @Override
     public double asDouble() {
         return value();

@@ -1,5 +1,7 @@
 package util.data.vals;
 
+import util.data.procs.MathEvalForVal;
+
 import java.math.BigDecimal;
 
 public class AnyDummy extends BaseVal implements NumericVal{
@@ -52,6 +54,11 @@ public class AnyDummy extends BaseVal implements NumericVal{
 
     @Override
     public BigDecimal asBigDecimal() {
+        return null;
+    }
+
+    @Override
+    public MathEvalForVal getMath() {
         return null;
     }
 

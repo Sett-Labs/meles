@@ -51,9 +51,8 @@ public class RealValSymbiote extends RealVal {
     public void addUnderling(RealVal underling) {
         underlings = ArrayUtils.add(underlings, underling);
     }
-    public RealVal[] getUnderlings() {
-        return underlings;
-    }
+
+    public NumericVal[] getUnderlings(){ return underlings; }
 
     public RealVal[] getDerived() {
         return Arrays.copyOfRange(underlings, 1, underlings.length);

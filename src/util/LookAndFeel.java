@@ -2,8 +2,11 @@ package util;
 
 import io.telnet.TelnetCodes;
 import util.data.vals.DynamicUnit;
+import util.data.vals.IntegerValSymbiote;
+import util.data.vals.NumericVal;
 import util.data.vals.RealValSymbiote;
 
+import java.util.Arrays;
 import java.util.StringJoiner;
 
 public class LookAndFeel {
@@ -138,21 +141,28 @@ public class LookAndFeel {
         int divisor = (int)Math.pow(10, (int)Math.log10(count));
         return count % divisor == 0;
     }
-
     public static String prettyPrintSymbiote(RealValSymbiote symbiote, String prefix, String cut, boolean crop, DynamicUnit du) {
+        var underlings = Arrays.copyOf( symbiote.getUnderlings(),symbiote.getUnderlings().length);
+        return prettyPrintSymbiote(underlings,prefix,cut,crop,du);
+    }
+    public static String prettyPrintSymbiote(IntegerValSymbiote symbiote, String prefix, String cut, boolean crop, DynamicUnit du) {
+        var underlings = Arrays.copyOf( symbiote.getUnderlings(),symbiote.getUnderlings().length);
+        underlings[0] = symbiote.getHost();
+        return prettyPrintSymbiote(underlings,prefix,cut,crop,du);
+    }
+    public static String prettyPrintSymbiote(NumericVal[] underlings, String prefix, String cut, boolean crop, DynamicUnit du) {
         var join = new StringJoiner("\r\n");
-        var underlings = symbiote.getUnderlings();
 
         if (prefix.isEmpty()) {
-            var host = underlings[0];
+            var host =underlings[0];
             String right;
             if (du == null) {
                 right = host.asString() + host.unit() + host.getExtraInfo();
             } else {
-                right = du.apply(host.value(), host.unit()) + host.getExtraInfo();
+                right = du.apply(host.asDouble(), host.unit()) + host.getExtraInfo();
             }
-            join.add(underlings[0].name() + " : " + right);
-            cut = underlings[0].name() + "_";
+            join.add(host.name() + " : " + right);
+            cut = host.name() + "_";
         }
         // First pass for the width
         var temp = new String[underlings.length - 1];
@@ -173,7 +183,7 @@ public class LookAndFeel {
             // spaced name?
             String right = "";
             if (du != null) {
-                right = du.apply(ling.value(), ling.unit());
+                right = du.apply(ling.asDouble(), ling.unit());
             } else {
                 right = ling.asString() + ling.unit();
             }
@@ -185,12 +195,15 @@ public class LookAndFeel {
                 var math = ling.getMath() != null ? ling.getMath().getOriExpr() : "";
 
                 if (!math.isEmpty()) {
-                    math = "  [" + math.replace("i0", "{" + symbiote.name() + "}") + "]";
+                    math = "  [" + math.replace("i0", "{" + underlings[0].name() + "}") + "]";
                 }
                 print = underlings[a].name() + " : " + right + math;
             }
             join.add(prefix + (a == underlings.length - 1 ? "└── " : "├── ") + print);
-            if (underlings[a] instanceof RealValSymbiote sym) {
+            /*if (underlings[a] instanceof RealValSymbiote sym) {
+                join.add(prettyPrintSymbiote(sym, a == underlings.length - 1 ? "    " : "│   ", sym.name() + "_", crop, du));
+            }*/
+            if (underlings[a] instanceof IntegerValSymbiote sym) {
                 join.add(prettyPrintSymbiote(sym, a == underlings.length - 1 ? "    " : "│   ", sym.name() + "_", crop, du));
             }
         }

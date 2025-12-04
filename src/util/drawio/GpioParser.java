@@ -101,7 +101,7 @@ public class GpioParser {
         // Do output pins first because they migh tbe referenced
         for (var entry : cells.entrySet()) {
             var cell = entry.getValue();
-            if (cell.type.equals("outputpin")) {
+            if (cell.getType().equals("outputpin")) {
                 var id = cell.getParam("group", "") + "_" + cell.getParam("name", "");
                 if( tls.rtvals().hasFlag(id) ) { // Don't repeat if it already exists.
                     Logger.info("Not adding "+id+" again.");
@@ -125,7 +125,7 @@ public class GpioParser {
         for (var entry : cells.entrySet()) {
             var cell = entry.getValue();
 
-            if (cell.type.equals("inputpin")) {
+            if (cell.getType().equals("inputpin")) {
                 var name = cell.getParam("gpio", "");
                 var pullPlace = cell.getParam("pulllogic", "none");
                 var pull = "none";

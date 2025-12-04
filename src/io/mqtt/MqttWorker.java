@@ -53,8 +53,7 @@ public class MqttWorker implements MqttCallback,Writable,ValUser {
 	private boolean connecting = false; // Flag that shows if the worker is trying to connect to the broker
 
 	private final Map<String, BaseVal> valReceived = new HashMap<>(); // Map containing all the subscriptions
-	private final ArrayList<String> subscriptions = new ArrayList<>();
-	private final ArrayList<Long> subsRecStamp = new ArrayList<>();
+    private final ArrayList<Subscription> subscriptions = new ArrayList<>();
 	private final Map<String, String> provide = new HashMap<>();
 	private final ArrayList<Writable> targets = new ArrayList<>();
 
@@ -66,8 +65,6 @@ public class MqttWorker implements MqttCallback,Writable,ValUser {
 	private final ScheduledExecutorService publishService;
 
     private boolean allowProperties = true;
-
-    private int oldId=-1;
 
 	public MqttWorker(String id, String address, String clientId, Rtvals rtvals,
                       EventLoopGroup eventLoopGroup, ScheduledExecutorService publishService) {
@@ -203,12 +200,12 @@ public class MqttWorker implements MqttCallback,Writable,ValUser {
 			return 0;
 		}
 		topic = topic.replace("\\","/"); // Make sure the correct one is used
-		if( subscriptions.contains(topic) )
+
+        if (cleanSubs(subscriptions,topic))
 			return 2;
 
         Logger.info(id()+" -> Adding subscription to "+topic);
-		subscriptions.add(topic);
-		subsRecStamp.add(-1L);
+		subscriptions.add(new Subscription(topic));
 		if( val != null)
 			valReceived.put(topic,val);
 
@@ -222,18 +219,13 @@ public class MqttWorker implements MqttCallback,Writable,ValUser {
 	public boolean removeSubscription( String topic ){
 
 		if( topic.equals("all")){
-			subscriptions.removeIf(this::unsubscribe);
-			subsRecStamp.clear();
+			subscriptions.removeIf( sub->unsubscribe(sub.topic));
 			return subscriptions.isEmpty();
         }
 
-        int index = subscriptions.indexOf(topic);
-        subsRecStamp.remove(index);
-        if (subscriptions.remove(index).equals(topic)) {
-            unsubscribe(topic);
-            return true;
-		}
-		return false;
+        subscriptions.stream().filter(sub->sub.topic.equals(topic))
+                                .forEach( sub->unsubscribe(sub.topic));
+		return subscriptions.stream().noneMatch( sub -> sub.topic.equals(topic));
 	}
 	/**
 	 * Obtain a list of all current subscriptions
@@ -252,31 +244,32 @@ public class MqttWorker implements MqttCallback,Writable,ValUser {
 
 		// Find the length of the longest string
 		for( var sub :subscriptions )
-			max = Math.max(max,sub.length());
+			max = Math.max(max,sub.topic.length());
 		max += 6; // Add a bit of space
 
-		for( int a=0;a<subscriptions.size();a++ ){
-			boolean old=false;
-			// Figure out how much time passed since last data or subscription
-			long passed = Instant.now().toEpochMilli()-Math.abs(subsRecStamp.get(a));
-			if( ttl>0 && passed > ttl ) // If passed is longer than ttl, consider it old
-				old=true;
+        for (Subscription subscription : subscriptions) {
+            boolean old = false;
+            var sub = subscription;
+            // Figure out how much time passed since last data or subscription
+            long passed = Instant.now().toEpochMilli() - Math.abs(sub.recTimestamp);
+            if (ttl > 0 && passed > ttl) // If passed is longer than ttl, consider it old
+                old = true;
 
-			// Build the prefix, !! if data is old and alternating color lines
-			var prefix = (old?"  !! ":"  ")+(toggle?TelnetCodes.TEXT_YELLOW:TelnetCodes.TEXT_DEFAULT);
-			toggle = !toggle;
+            // Build the prefix, !! if data is old and alternating color lines
+            var prefix = (old ? "  !! " : "  ") + (toggle ? TelnetCodes.TEXT_YELLOW : TelnetCodes.TEXT_DEFAULT);
+            toggle = !toggle;
 
-			// Build the suffix, showing the age of the data or -1 if none yet, color depends on old.
-			String suffix;
-			if( subsRecStamp.get(a)<0 ) {
-				suffix = (old?TelnetCodes.TEXT_RED:TelnetCodes.TEXT_ORANGE)+"[-1]";
-			}else{
-				suffix = (old ? TelnetCodes.TEXT_RED : "") + "[" + TimeTools.convertPeriodToString(passed, TimeUnit.MILLISECONDS) + "]";
-			}
+            // Build the suffix, showing the age of the data or -1 if none yet, color depends on old.
+            String suffix;
+            if (sub.recTimestamp < 0) {
+                suffix = (old ? TelnetCodes.TEXT_RED : TelnetCodes.TEXT_ORANGE) + "[-1]";
+            } else {
+                suffix = (old ? TelnetCodes.TEXT_RED : "") + "[" + TimeTools.convertPeriodToString(passed, TimeUnit.MILLISECONDS) + "]";
+            }
 
-			// Put it all together, add spaces between depending on the length of the longest sub
-			join.add(prefix + "==> "+ subscriptions.get(a) + " ".repeat(max-subscriptions.get(a).length() +(old?-3:0)) + suffix + TelnetCodes.TEXT_DEFAULT);
-		}
+            // Put it all together, add spaces between depending on the length of the longest sub
+            join.add(prefix + "==> " + subscription + " ".repeat(max - subscription.topic.length() + (old ? -3 : 0)) + suffix + TelnetCodes.TEXT_DEFAULT);
+        }
 		return join.toString();
 	}
 	/**
@@ -384,20 +377,21 @@ public class MqttWorker implements MqttCallback,Writable,ValUser {
 		Logger.tag("RAW").warn(id+"\t"+topic+"\t"+load);  // Store it like any other received data
 
 		// Update data timestamps taking wildcards in account
-		for( int a=0;a<subscriptions.size();a++ ){
-			if( topic.matches(subscriptions.get(a).replace("#",".*")) )
-				subsRecStamp.set(a,Instant.now().toEpochMilli());
+		for( var sub : subscriptions ){
+			if( topic.matches(sub.topic.replace("#",".*")) )
+				sub.updateTimestamp();
 		}
+        // Provide the data to those requesting it
         if (!targets.isEmpty())
             targets.removeIf(dt -> !dt.writeLine(id, topic+":"+load));
 
 		// Process the message
 		var rtval = valReceived.get(topic);
-
 		if( rtval != null ){
 			rtval.parseValue(load);
             return;
         }
+        // If storeTopic not use, stop here
         if (storeTopic.isEmpty())
             return;
 
@@ -497,7 +491,7 @@ public class MqttWorker implements MqttCallback,Writable,ValUser {
 	 * Clear all data from the worker to be able to reload it.
 	 */
 	public void clear() {
-		subscriptions.forEach(this::unsubscribe);
+		subscriptions.forEach(sub->unsubscribe(sub.topic));
 		targets.clear();
 		disconnect();
 	}
@@ -528,13 +522,11 @@ public class MqttWorker implements MqttCallback,Writable,ValUser {
 		connecting=false;
 		String subs="";
 		try {
-			for( String sub:subscriptions ){
-				subs=sub; // Purely to know when the error occurred
-				client.subscribe( sub,1 );
-				Logger.info(id+"(mqtt) -> Subscribed to "+sub);
-				int index = subscriptions.indexOf(sub);
-				if( index != -1)
-					subsRecStamp.set( index, -1L*Instant.now().toEpochMilli() );
+			for( var sub:subscriptions ){
+				subs=sub.topic; // Purely to know when the error occurred
+				client.subscribe( subs,1 );
+				Logger.info(id+"(mqtt) -> Subscribed to "+subs);
+                sub.recTimestamp = -1L*Instant.now().toEpochMilli();
 			}
 		} catch (MqttException e) {
 			Logger.error( id+"(mqtt) -> Failed to subscribe to: "+ subs);
@@ -703,5 +695,91 @@ public class MqttWorker implements MqttCallback,Writable,ValUser {
             return "[mqttbroker:"+id()+" ok]";
         return "[mqttbroker:"+id()+" needs "+join+"]";
 
+    }
+    public static boolean filterMatch(String filter, String topic) {
+        // Handle null or empty strings
+        if (filter == null || topic == null) {
+            return false;
+        }
+
+        // Handle exact match
+        if (topic.equals(filter)) {
+            return true;
+        }
+        // No wildcards so return
+        if (!(filter.contains("#") || filter.contains("+"))) return false;
+
+        // Split into segments
+        String[] filterSegments = filter.split("/", -1);  // -1 to keep trailing empty strings
+        String[] topicSegments = topic.split("/", -1);
+
+        int filterLen = filterSegments.length;
+        int topicLen = topicSegments.length;
+
+        for (int i = 0; i < Math.max(filterLen, topicLen); i++) {
+            String filterSeg = i < filterLen ? filterSegments[i] : null;
+            String topicSeg = i < topicLen ? topicSegments[i] : null;
+
+            // If filter segment is null but topic segment exists
+            if (filterSeg == null && topicSeg != null) {
+                return false;
+            }
+
+            // Multi-level wildcard (#) - must be last segment
+            if ("#".equals(filterSeg)) {
+                // Check if it's the last segment in the filter
+                return i == filterLen - 1;
+            }
+
+            // Single-level wildcard (+)
+            if ("+".equals(filterSeg)) {
+                // If no corresponding topic segment, fail
+                if (topicSeg == null) {
+                    return false;
+                }
+                // Continue to next segment
+                continue;
+            }
+
+            // No wildcard - exact match required
+            if (topicSeg == null || !topicSeg.equals(filterSeg)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    public static int charOccurences( String data, char ch ){
+        int cnt = 0;
+        for( var c : data.toCharArray())
+            cnt += c==ch?1:0;
+        return cnt;
+    }
+    private static boolean cleanSubs(ArrayList<Subscription> subs, String newSub ){
+        if( subs.isEmpty())
+            return false;
+
+        boolean ok = false;
+        for( var sub : subs ){
+            if( filterMatch(sub.topic,newSub) ) {
+                Logger.info("Topic match: " + newSub + " with filter " + sub.topic);
+                ok= true;
+            }
+            if( filterMatch(newSub, sub.topic) ) {
+                Logger.info("Topic match: " + sub.topic + " with filter " + newSub);
+                ok=true;
+            }
+        }
+        return ok;
+    }
+    private static class Subscription{
+        private final String topic;
+        private long recTimestamp;
+
+        public Subscription(String topic){
+            this.topic=topic;
+        }
+        public void updateTimestamp(){
+            recTimestamp=Instant.now().toEpochMilli();
+        }
     }
 }

@@ -205,7 +205,7 @@ public class Drawio {
     }
     public static class DrawioCell {
         String drawId;
-        String type;
+        private String type;
         String melesId;
 
         HashMap<String, String> params = new HashMap<>();
@@ -216,7 +216,12 @@ public class Drawio {
             this.melesId = melesId;
             this.type = type;
         }
-
+        public String getType(){
+            return type;
+        }
+        public void setType(String type){
+            this.type=type;
+        }
         public void addParam(String key, String value) {
             params.put(key.toLowerCase(), clean(value));
         }

@@ -10,14 +10,20 @@ import java.util.Arrays;
 public class IntegerValSymbiote extends IntegerVal {
 
     NumericVal[] underlings;
-    boolean passOriginal = true;
+    boolean passOriginal = false;
     int level = 0;
     IntegerVal host;
 
+    public IntegerValSymbiote(int level, IntegerVal host ) {
+        super(host.group(), host.name(), host.unit());
+        underlings = new NumericVal[]{host};
+        this.level=level;
+        this.host=host;
+    }
     public IntegerValSymbiote(int level, IntegerVal host, NumericVal... underlings) {
         super(host.group(), host.name(), host.unit());
 
-        this.underlings = underlings;
+        this.underlings = ArrayUtils.insert(0,underlings,host);
         this.level = level;
         this.host = host;
     }
@@ -51,9 +57,27 @@ public class IntegerValSymbiote extends IntegerVal {
         host.defValue(defValue);
         this.defValue = defValue;
     }
-
+    public NumericVal[] getUnderlings(){
+        return underlings;
+    }
     public void addUnderling(NumericVal underling) {
         underlings = ArrayUtils.add(underlings, underling);
+    }
+
+    public NumericVal[] getDerived() {
+        return Arrays.copyOfRange(underlings, 1, underlings.length);
+    }
+    public NumericVal getHost(){
+        return host;
+    }
+    public boolean replaceUnderling( NumericVal repl ){
+        for( int i=1;i<underlings.length;i++ ){
+            if( underlings[i].id().equals(repl.id() )){
+                underlings[i]=repl;
+                return true;
+            }
+        }
+        return false;
     }
     public void removePrinterUnderling(Writable wr){
         int index=-1;

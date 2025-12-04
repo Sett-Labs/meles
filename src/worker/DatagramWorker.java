@@ -61,7 +61,7 @@ public class DatagramWorker implements Runnable {
 		while (goOn) {
 			try {
 				Datagram d = Core.retrieve();
-				Logger.info("Retrieved: " + d.getData());
+
 				String label = d.getLabel();
 
 				if (label == null) {

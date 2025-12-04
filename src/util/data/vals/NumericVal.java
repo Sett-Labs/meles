@@ -29,6 +29,8 @@ public interface NumericVal {
 
     default void setMath(MathEvalForVal math) {
     }
+    MathEvalForVal getMath();
+
     default String getExtraInfo() {
         return "";
     }
