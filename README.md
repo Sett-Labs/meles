@@ -2,7 +2,7 @@ Meles
 =========
 ## Your Data Ingestion Workhorse
 
-*Like its namesake, Meles works relentlessly in the background—not just digging and storing, 
+*Like its namesake, Meles works relentlessly in the background, not just digging and storing, 
 but actively routing, transforming, and automating your data flows so Grafana can shine.*
 
 1. **"My sensor speaks Serial, but I need MQTT"** → Meles converts protocols
