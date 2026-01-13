@@ -213,7 +213,7 @@ public class Meles implements Commandable{
     }
     private void addRtvals(){
         rtvals = new Rtvals();
-        addCommandable(rtvals,"flags;fv;reals;real;rv;texts;tv;int;integer;text;flag");
+        addCommandable(rtvals,"flags;fv;reals;real;rv;texts;tv;int;integer;iv;text;flag");
         addCommandable(rtvals,"rtval","rtvals");
         addCommandable(rtvals,"stop");
     }
