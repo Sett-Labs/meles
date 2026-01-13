@@ -19,6 +19,25 @@ Note: Version numbering: x.y.z
   - email
   - mqtt (partial)
 
+### Rtvals
+- Requests for rtvals are now registered in two collections:
+    - one for requests of existing rtvals
+      - if an rtval is upgraded to symbiote, these get the new instance
+    - one for non-existing
+      - if an rtval is created, it's given to these, if accepted they
+      are moved to the other collection
+  - **Systems Results:** 
+    - allow runtime upgrading of a regular rtval to a symbiote variant, which means this can 
+    add functionality on the fly.
+      - **Benefits**
+        - zero polling overhead
+        - no implementation code needed at rtval level
+        - Easy way to add new functionality in the future that depends on rtval updates occurring
+    - timing independent startup (modules that create can be initialized after those that use)
+    - startup verification if all required rtvals are created
+  - **Feature results**
+    - Rtvals can now be used as a source
+
 ### MQTT
 - Fixed: Data stream can now be stopped in telnet.
 - Fixed: Overlapping subscribe requests aren't honored.
@@ -124,6 +143,11 @@ Started a long overdue refactor of netty related code
 - Taskmanagerpool watcher 
   - gave an error on linux because it wasn't using an absolute path.
   - tried to monitor even without a valid folder
+
+### Modbus RTU
+- Made it easier to use the results of a read in a path by returning ints instead of hex
+and splitting according to the frame.
+- 
 
 ## 1.0.0 (15/05/2025) - renamed project and reset version to 1
 
