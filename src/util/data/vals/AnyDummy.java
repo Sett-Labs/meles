@@ -63,6 +63,11 @@ public class AnyDummy extends BaseVal implements NumericVal{
     }
 
     @Override
+    public void defValue(double val) {
+
+    }
+
+    @Override
     public void triggerUpdate() {
 
     }

@@ -129,4 +129,9 @@ public class FlagVal extends BaseVal implements NumericVal {
     public MathEvalForVal getMath() {
         return null;
     }
+
+    @Override
+    public void defValue(double val) {
+        defValue(val > 0);
+    }
 }

@@ -109,6 +109,11 @@ public class IntegerVal extends BaseVal implements NumericVal {
     }
 
     @Override
+    public void defValue(double val) {
+        defValue((int) val);
+    }
+
+    @Override
     public double asDouble() {
         return value();
     }
