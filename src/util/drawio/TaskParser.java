@@ -475,7 +475,7 @@ public class TaskParser {
 
     private static LogBlock doLogBlock(Drawio.DrawioCell cell, TaskTools tools, String id) {
         var blockId = alterId(id);
-        Logger.info(blockId + " -> Processing Log block");
+        Logger.info(blockId + " -> Processing "+cell.getType() );
 
         if (!cell.hasParam("message")) {
             Logger.error(blockId + " -> Logblock without a message specified");
@@ -494,8 +494,9 @@ public class TaskParser {
             case "infoblock" -> LogBlock.info(message,refs);
             default -> null;
         };
-        tools.rtvals.registerUpdateUser(lb);
         if (lb != null) {
+            if( refs.length !=0 )
+                tools.rtvals.registerUpdateUser(lb);
             lb.id(blockId);
             // Arrows
             if (!addNext(cell, lb, tools, "next", "pass", "ok")) {
