@@ -16,7 +16,9 @@ public class DrawioEditor {
         var dig = XMLdigger.goIn(xml, "mxfile");
         for (var diagram : dig.digOut("diagram")) {
             diagram.digDown("mxGraphModel").digDown("root");
-            addIdsInTab(diagram, list);
+            if( addIdsInTab(diagram, list) ){
+                Logger.info("Written to "+xml.getFileName());
+            }
         }
     }
 
@@ -36,8 +38,11 @@ public class DrawioEditor {
                 iterator.remove();
             }
         }
-        if (altered)
+        if (altered) {
             dig.useEditor().build();
+            return true;
+        }
+        return false;
     }
 
     public static int addAttributeBatch(Path xml, ArrayList<String[]> prep) {
