@@ -282,20 +282,17 @@ public class Rtvals implements Commandable,ValUser {
 
      /* ************************************** F L A G S ************************************************************* */
     public FlagVal addFlagVal(ValUser user, FlagVal fv) {
-        return addFlagVal(user,fv,false);
-    }
-    public FlagVal addFlagVal(ValUser user, FlagVal fv, boolean overwrite) {
         if (fv == null) {
             Logger.error("Invalid FlagVal received, won't try adding it");
             return null;
         }
-        if( overwrite ) {
-            Logger.info("Overwriting the flagval: "+fv.id());
-            return flagVals.put(fv.id(), fv);
+        if( flagVals.putIfAbsent(fv.id(), fv) == null ) {
+            broadCastCreation(fv); //because new was created or may
+        }else{
+            broadcastReplacement(fv); // Because existing was replaced
         }
-        var old = flagVals.putIfAbsent(fv.id(), fv);
         applyUser(user,true);
-        return old==null?fv:old;
+        return fv;
     }
     public boolean hasFlag(String flag) {
         return flagVals.containsKey(flag);
@@ -304,6 +301,7 @@ public class Rtvals implements Commandable,ValUser {
     public FlagVal getFlagVal(ValUser user,String id) {
         var opt = Optional.ofNullable(flagVals.get(id));
         applyUser(user,opt.isPresent());
+        Logger.info("Received request for "+id+ " from "+ user.id());
         var split = id.split("_",2);
         return opt.orElseGet(() -> FlagVal.createDummy(split[0], split[1]));
     }
@@ -360,10 +358,27 @@ public class Rtvals implements Commandable,ValUser {
             Logger.info("rtvals -> Need creation collection is empty");
         }else{
             Logger.error("rtvals -> Still missing "+needCreations.stream().map(ValUser::getValIssues).collect(Collectors.joining("; ")));
+            Logger.info( "Full colllection "+getAllValIds() );
             ok=false;
         }
         Logger.info("NeedUpdates contains "+needUpdates.size()+" element(s).");
         return ok;
+    }
+    public String getAllValIds(){
+        StringJoiner join = new StringJoiner(",");
+        for( var intv : integerVals.keySet() ) {
+            join.add("(I)"+intv);
+        }
+        for( var intv : realVals.keySet() ) {
+            join.add("(R)"+intv);
+        }
+        for( var intv : flagVals.keySet() ) {
+            join.add("(F)"+intv);
+        }
+        for( var intv : textVals.keySet() ) {
+            join.add("(T)"+intv);
+        }
+        return join.toString();
     }
     /**
      * Look through all the vals for one that matches the id
